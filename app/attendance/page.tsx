@@ -1,48 +1,74 @@
-import { AttendanceForm } from "@/components/forms/attendance-form";
-import { WorkerForm } from "@/components/forms/worker-form";
-import { AttendanceSummary } from "@/components/lists/attendance-summary";
-import { WorkerAttendanceTable } from "@/components/lists/worker-attendance-table";
-import { MobilePage } from "@/components/layout/mobile-page";
-import { getCurrentMonthLabel } from "@/features/attendance/calculations";
+import { AttendanceRegister } from "@/components/attendance/attendance-register";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { BottomNav } from "@/components/layout/bottom-nav";
 import {
-  getAttendanceRecordsPage,
-  getAttendanceSummary,
+  getCurrentMonthValue,
+  getMonthLabel,
+} from "@/features/attendance/calculations";
+import {
+  getAttendanceRecords,
   getWorkers,
-  getWorkersPage,
 } from "@/features/attendance/queries";
 import { getProjects } from "@/features/projects/queries";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function AttendancePage() {
-  const [projects, workers, workersPage, attendanceRows, summary] = await Promise.all([
+type AttendancePageProps = {
+  searchParams?: Promise<{
+    project?: string;
+    month?: string;
+  }>;
+};
+
+export default async function AttendancePage({ searchParams }: AttendancePageProps) {
+  const params = (await searchParams) ?? {};
+  const selectedMonth = params.month && /^\d{4}-\d{2}$/.test(params.month)
+    ? params.month
+    : getCurrentMonthValue();
+
+  const [projects, workers, attendanceRows, user] = await Promise.all([
     getProjects(),
     getWorkers(),
-    getWorkersPage(),
-    getAttendanceRecordsPage(),
-    getAttendanceSummary(),
+    getAttendanceRecords(selectedMonth),
+    getCurrentUser(),
   ]);
 
+  const selectedProjectId =
+    params.project && projects.some((project) => project.id === params.project)
+      ? params.project
+      : projects[0]?.id ?? "";
+
+  const userName =
+    typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
+      ? user.user_metadata.name
+      : user?.email ?? "User";
+
   return (
-    <MobilePage
-      eyebrow="Worker Attendance"
-      title="Attendance"
-      description="Create workers, mark daily attendance, and automatically calculate salary expense for the month."
-    >
-      <WorkerForm projects={projects} />
-      <AttendanceForm projects={projects} workers={workers} />
-      <AttendanceSummary
-        monthLabel={getCurrentMonthLabel()}
-        totalDaysWorked={summary.totalDaysWorked}
-        totalOtHours={summary.totalOtHours}
-        totalAmount={summary.totalAmount}
+    <main className="mx-auto min-h-screen w-full max-w-[1440px] px-3 pb-24 pt-4 sm:px-5 sm:pt-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent)]">
+            Worker Attendance
+          </p>
+          <p className="mt-1 text-sm text-[color:var(--muted)]">
+            Monthly register view connected directly to the attendance ledger flow.
+          </p>
+        </div>
+        <SignOutButton />
+      </div>
+
+      <AttendanceRegister
+        projects={projects}
+        workers={workers}
+        attendanceRows={attendanceRows}
+        selectedProjectId={selectedProjectId}
+        selectedMonth={selectedMonth}
+        monthLabel={getMonthLabel(selectedMonth)}
+        userName={userName}
       />
-      <WorkerAttendanceTable
-        workers={workersPage.rows}
-        workersTotalCount={workersPage.pagination.total}
-        attendanceRows={attendanceRows.rows}
-        attendanceTotalCount={attendanceRows.pagination.total}
-      />
-    </MobilePage>
+
+      <BottomNav />
+    </main>
   );
 }

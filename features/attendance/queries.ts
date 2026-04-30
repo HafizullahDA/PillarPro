@@ -1,5 +1,5 @@
 import {
-  getCurrentMonthRange,
+  getMonthRange,
   getWorkDayValue,
 } from "@/features/attendance/calculations";
 import type {
@@ -27,6 +27,7 @@ export async function getWorkers(): Promise<WorkerListItem[]> {
   const { data, error } = await supabase
     .from("workers")
     .select("id, project_id, name, designation, daily_rate, created_at, projects(name)")
+    .eq("active", true)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -54,6 +55,7 @@ export async function getWorkersPage(
     .select("id, project_id, name, designation, daily_rate, created_at, projects(name)", {
       count: "exact",
     })
+    .eq("active", true)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -87,12 +89,12 @@ export async function createWorker(payload: WorkerInsert) {
   return data;
 }
 
-export async function getAttendanceRecords(): Promise<AttendanceListItem[]> {
+export async function getAttendanceRecords(monthValue?: string): Promise<AttendanceListItem[]> {
   const supabase = createServerSupabaseClient();
-  const monthRange = getCurrentMonthRange();
+  const monthRange = getMonthRange(monthValue);
   const { data, error } = await supabase
     .from("attendance")
-    .select("id, project_id, status, ot_hours, amount, attendance_date, workers(name), projects(name)")
+    .select("id, project_id, worker_id, status, ot_hours, amount, attendance_date, workers(name), projects(name)")
     .gte("attendance_date", monthRange.from)
     .lte("attendance_date", monthRange.to)
     .order("attendance_date", { ascending: false });
@@ -102,6 +104,7 @@ export async function getAttendanceRecords(): Promise<AttendanceListItem[]> {
   return (data ?? []).map((row) => ({
     id: row.id,
     project_id: row.project_id,
+    worker_id: row.worker_id,
     project_name: getRelationName(
       row.projects as { name?: string } | { name?: string }[] | null,
     ),
@@ -117,14 +120,15 @@ export async function getAttendanceRecords(): Promise<AttendanceListItem[]> {
 
 export async function getAttendanceRecordsPage(
   options?: PaginationOptions,
+  monthValue?: string,
 ): Promise<PaginatedResult<AttendanceListItem>> {
   const supabase = createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
-  const monthRange = getCurrentMonthRange();
+  const monthRange = getMonthRange(monthValue);
   const { data, error, count } = await supabase
     .from("attendance")
     .select(
-      "id, project_id, status, ot_hours, amount, attendance_date, workers(name), projects(name)",
+      "id, project_id, worker_id, status, ot_hours, amount, attendance_date, workers(name), projects(name)",
       { count: "exact" },
     )
     .gte("attendance_date", monthRange.from)
@@ -138,6 +142,7 @@ export async function getAttendanceRecordsPage(
     rows: (data ?? []).map((row) => ({
       id: row.id,
       project_id: row.project_id,
+      worker_id: row.worker_id,
       project_name: getRelationName(
         row.projects as { name?: string } | { name?: string }[] | null,
       ),
@@ -180,20 +185,25 @@ export async function createAttendanceRecord(payload: AttendanceInsert) {
   }
 
   const amount = payload.amount > 0 ? payload.amount : 0;
+  let transactionId: string | null = null;
 
-  const transactionResult = await createTransaction({
-    project_id: payload.project_id,
-    type: "expense",
-    category: "salary_expense",
-    amount,
-    date: payload.attendance_date,
-    reference_id: payload.id,
-    linked_id: payload.worker_id,
-    worker_id: payload.worker_id,
-  });
+  if (amount > 0) {
+    const transactionResult = await createTransaction({
+      project_id: payload.project_id,
+      type: "expense",
+      category: "salary_expense",
+      amount,
+      date: payload.attendance_date,
+      reference_id: payload.id,
+      linked_id: payload.worker_id,
+      worker_id: payload.worker_id,
+    });
 
-  if (!transactionResult.success) {
-    throw new Error(transactionResult.error);
+    if (!transactionResult.success) {
+      throw new Error(transactionResult.error);
+    }
+
+    transactionId = transactionResult.data.id;
   }
 
   const { data, error } = await supabase
@@ -208,13 +218,50 @@ export async function createAttendanceRecord(payload: AttendanceInsert) {
       overtime_units: payload.overtime_units,
       ot_hours: payload.ot_hours,
       amount,
-      transaction_id: transactionResult.data.id,
+      transaction_id: transactionId,
     })
     .select("id")
     .single();
 
   if (error) {
-    await deleteTransaction(transactionResult.data.id);
+    if (transactionId) {
+      await deleteTransaction(transactionId);
+    }
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+export async function deactivateWorker(workerId: string) {
+  const supabase = createServerSupabaseClient();
+  const normalizedWorkerId = workerId.trim();
+
+  if (!normalizedWorkerId) {
+    throw new Error("Worker is required.");
+  }
+
+  const { count, error: attendanceError } = await supabase
+    .from("attendance")
+    .select("id", { count: "exact", head: true })
+    .eq("worker_id", normalizedWorkerId);
+
+  if (attendanceError) {
+    throw new Error(attendanceError.message);
+  }
+
+  if ((count ?? 0) > 0) {
+    throw new Error("This worker already has attendance records and cannot be removed.");
+  }
+
+  const { data, error } = await supabase
+    .from("workers")
+    .update({ active: false })
+    .eq("id", normalizedWorkerId)
+    .select("id")
+    .single();
+
+  if (error) {
     throw new Error(error.message);
   }
 

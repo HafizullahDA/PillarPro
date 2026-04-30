@@ -40,8 +40,9 @@ export function getWorkDayValue(status: string) {
   return 0;
 }
 
-export function getCurrentMonthRange() {
-  const now = new Date();
+export function getMonthRange(monthValue?: string) {
+  const parsed = parseMonthValue(monthValue);
+  const now = parsed ?? new Date();
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
 
@@ -51,14 +52,44 @@ export function getCurrentMonthRange() {
   };
 }
 
-export function getCurrentMonthLabel() {
+export function getMonthLabel(monthValue?: string) {
+  const parsed = parseMonthValue(monthValue);
   return new Intl.DateTimeFormat("en-IN", {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
-  }).format(new Date());
+  }).format(parsed ?? new Date());
+}
+
+export function getCurrentMonthRange() {
+  return getMonthRange();
+}
+
+export function getCurrentMonthLabel() {
+  return getMonthLabel();
+}
+
+export function getCurrentMonthValue() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 function roundMoney(value: number) {
   return Number(value.toFixed(2));
+}
+
+function parseMonthValue(monthValue?: string) {
+  if (!monthValue || !/^\d{4}-\d{2}$/.test(monthValue)) {
+    return null;
+  }
+
+  const [yearText, monthText] = monthValue.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month - 1, 1));
 }

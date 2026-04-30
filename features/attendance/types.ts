@@ -11,6 +11,7 @@ export type WorkerListItem = {
 export type AttendanceListItem = {
   id: string;
   project_id: string;
+  worker_id: string;
   project_name: string;
   worker_name: string;
   status: string;

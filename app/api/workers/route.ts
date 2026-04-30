@@ -1,4 +1,8 @@
-import { createWorker, getWorkersPage } from "@/features/attendance/queries";
+import {
+  createWorker,
+  deactivateWorker,
+  getWorkersPage,
+} from "@/features/attendance/queries";
 import {
   parseWorkerPayload,
   WorkerAttendanceValidationError,
@@ -28,5 +32,16 @@ export async function POST(request: Request) {
       return jsonError(error, "Please fix the highlighted fields.", 400, error.fieldErrors);
     }
     return jsonError(error, "Failed to create worker.");
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const workerId = searchParams.get("id") ?? "";
+    const worker = await deactivateWorker(workerId);
+    return jsonData(worker);
+  } catch (error) {
+    return jsonError(error, "Failed to remove worker.", 400);
   }
 }

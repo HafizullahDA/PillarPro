@@ -11,8 +11,10 @@ import { parsePaginationParams } from "@/lib/utils/pagination";
 
 export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
     const rows = await getAttendanceRecordsPage(
-      parsePaginationParams(new URL(request.url).searchParams),
+      parsePaginationParams(url.searchParams),
+      url.searchParams.get("month") ?? undefined,
     );
     return jsonData(rows);
   } catch (error) {
