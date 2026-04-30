@@ -6,6 +6,12 @@ export type DashboardSummary = {
   receivables: number;
 };
 
+export type DashboardOutstandingAlert = {
+  project_id: string;
+  project_name: string;
+  outstanding: number;
+};
+
 export type DashboardProjectGroup = {
   project_id: string;
   project_name: string;

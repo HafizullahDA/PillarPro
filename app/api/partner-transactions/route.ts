@@ -1,16 +1,19 @@
 import {
   createPartnerTransaction,
-  getPartnerTransactions,
+  getPartnerTransactionsPage,
 } from "@/features/partners/queries";
 import {
   parsePartnerTransactionPayload,
   PartnerValidationError,
 } from "@/features/partners/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const rows = await getPartnerTransactions();
+    const rows = await getPartnerTransactionsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(rows);
   } catch (error) {
     return jsonError(error, "Failed to fetch partner transactions.");

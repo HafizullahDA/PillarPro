@@ -1,13 +1,16 @@
-import { createProject, getProjects } from "@/features/projects/queries";
+import { createProject, getProjectsPage } from "@/features/projects/queries";
 import {
   parseProjectPayload,
   ProjectValidationError,
 } from "@/features/projects/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const projects = await getProjects();
+    const projects = await getProjectsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(projects);
   } catch (error) {
     return jsonError(error, "Failed to fetch projects.");

@@ -1,16 +1,19 @@
 import {
   createAttendanceRecord,
-  getAttendanceRecords,
+  getAttendanceRecordsPage,
 } from "@/features/attendance/queries";
 import {
   parseAttendancePayload,
   WorkerAttendanceValidationError,
 } from "@/features/attendance/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const rows = await getAttendanceRecords();
+    const rows = await getAttendanceRecordsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(rows);
   } catch (error) {
     return jsonError(error, "Failed to fetch attendance.");

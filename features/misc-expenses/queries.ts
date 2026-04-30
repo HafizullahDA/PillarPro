@@ -2,9 +2,18 @@ import type {
   MiscExpenseInsert,
   MiscExpenseListItem,
 } from "@/features/misc-expenses/types";
+import {
+  createTransaction,
+  deleteTransaction,
+} from "@/lib/services/transaction-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  buildPaginationMeta,
+  normalizePagination,
+  type PaginatedResult,
+  type PaginationOptions,
+} from "@/lib/utils/pagination";
 import { getRelationName } from "@/lib/utils/supabase-relations";
-import { createTransactionRecord } from "@/services/transactions/create-transaction";
 
 export async function getMiscExpenses(): Promise<MiscExpenseListItem[]> {
   const supabase = createServerSupabaseClient();
@@ -28,18 +37,52 @@ export async function getMiscExpenses(): Promise<MiscExpenseListItem[]> {
   }));
 }
 
+export async function getMiscExpensesPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<MiscExpenseListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("misc_expenses")
+    .select(
+      "id, project_id, category, amount, expense_date, description, notes, projects(name)",
+      { count: "exact" },
+    )
+    .order("expense_date", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      category: row.category,
+      amount: Number(row.amount ?? 0),
+      expense_date: row.expense_date,
+      description: row.description ?? row.notes ?? "",
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
+}
+
 export async function createMiscExpense(payload: MiscExpenseInsert) {
   const supabase = createServerSupabaseClient();
-  const transaction = await createTransactionRecord({
+  const transactionResult = await createTransaction({
     project_id: payload.project_id,
-    transaction_date: payload.expense_date,
-    transaction_type: "expense",
-    direction: "outflow",
+    type: "expense",
+    category: payload.category,
     amount: payload.amount,
-    reference_table: "misc_expenses",
+    date: payload.expense_date,
     reference_id: payload.id,
-    notes: `Misc expense: ${payload.category}`,
   });
+
+  if (!transactionResult.success) {
+    throw new Error(transactionResult.error);
+  }
 
   const { data, error } = await supabase
     .from("misc_expenses")
@@ -51,13 +94,13 @@ export async function createMiscExpense(payload: MiscExpenseInsert) {
       expense_date: payload.expense_date,
       description: payload.description,
       notes: payload.description,
-      transaction_id: transaction.id,
+      transaction_id: transactionResult.data.id,
     })
     .select("id")
     .single();
 
   if (error) {
-    await supabase.from("transactions").delete().eq("id", transaction.id);
+    await deleteTransaction(transactionResult.data.id);
     throw new Error(error.message);
   }
 

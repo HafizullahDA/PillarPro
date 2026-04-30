@@ -6,12 +6,21 @@ import type {
   ReceiptInsert,
   ReceiptListItem,
 } from "@/features/receivables/types";
+import {
+  createTransaction,
+  deleteTransaction,
+} from "@/lib/services/transaction-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  buildPaginationMeta,
+  normalizePagination,
+  type PaginatedResult,
+  type PaginationOptions,
+} from "@/lib/utils/pagination";
 import {
   getRelationBillNumber,
   getRelationName,
 } from "@/lib/utils/supabase-relations";
-import { createTransactionRecord } from "@/services/transactions/create-transaction";
 
 export async function getBills(): Promise<BillListItem[]> {
   const supabase = createServerSupabaseClient();
@@ -39,18 +48,55 @@ export async function getBills(): Promise<BillListItem[]> {
   }));
 }
 
+export async function getBillsPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<BillListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("bills")
+    .select(
+      "id, project_id, bill_number, bill_type, gross_amount, deductions, net_payable, bill_date, projects(name)",
+      { count: "exact" },
+    )
+    .order("bill_date", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      bill_number: row.bill_number,
+      bill_type: row.bill_type ?? "",
+      gross_amount: Number(row.gross_amount ?? 0),
+      deductions: Number(row.deductions ?? 0),
+      net_payable: Number(row.net_payable ?? 0),
+      bill_date: row.bill_date,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
+}
+
 export async function createBill(payload: BillInsert) {
   const supabase = createServerSupabaseClient();
-  const transaction = await createTransactionRecord({
+  const transactionResult = await createTransaction({
     project_id: payload.project_id,
-    transaction_date: payload.bill_date,
-    transaction_type: "receivable",
-    direction: "inflow",
+    type: "receivable",
+    category: "receivable_bill",
     amount: payload.net_payable,
-    reference_table: "bills",
+    date: payload.bill_date,
     reference_id: payload.id,
-    notes: `Bill ${payload.bill_number} - ${payload.bill_type}`,
+    linked_id: payload.bill_number,
   });
+
+  if (!transactionResult.success) {
+    throw new Error(transactionResult.error);
+  }
 
   const { data, error } = await supabase
     .from("bills")
@@ -65,13 +111,13 @@ export async function createBill(payload: BillInsert) {
       deductions: payload.deductions,
       net_payable: payload.net_payable,
       status: "raised",
-      transaction_id: transaction.id,
+      transaction_id: transactionResult.data.id,
     })
     .select("id")
     .single();
 
   if (error) {
-    await supabase.from("transactions").delete().eq("id", transaction.id);
+    await deleteTransaction(transactionResult.data.id);
     throw new Error(error.message);
   }
 
@@ -105,18 +151,56 @@ export async function getReceipts(): Promise<ReceiptListItem[]> {
   }));
 }
 
+export async function getReceiptsPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<ReceiptListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("receipts")
+    .select(
+      "id, project_id, bill_id, amount, receipt_date, payment_mode, payment_reference, bills(bill_number), projects(name)",
+      { count: "exact" },
+    )
+    .order("receipt_date", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      bill_number: getRelationBillNumber(
+        row.bills as { bill_number?: string } | { bill_number?: string }[] | null,
+      ),
+      amount: Number(row.amount ?? 0),
+      receipt_date: row.receipt_date,
+      payment_mode: row.payment_mode ?? "",
+      payment_reference: row.payment_reference,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
+}
+
 export async function createReceipt(payload: ReceiptInsert) {
   const supabase = createServerSupabaseClient();
-  const transaction = await createTransactionRecord({
+  const transactionResult = await createTransaction({
     project_id: payload.project_id,
-    transaction_date: payload.receipt_date,
-    transaction_type: "receivable",
-    direction: "inflow",
+    type: "receivable",
+    category: "receivable_payment",
     amount: payload.amount,
-    reference_table: "receipts",
+    date: payload.receipt_date,
     reference_id: payload.id,
-    notes: `Receivable payment reference: ${payload.payment_reference}`,
+    linked_id: payload.bill_id,
   });
+
+  if (!transactionResult.success) {
+    throw new Error(transactionResult.error);
+  }
 
   const { data, error } = await supabase
     .from("receipts")
@@ -129,13 +213,13 @@ export async function createReceipt(payload: ReceiptInsert) {
       payment_mode: payload.payment_mode,
       payment_reference: payload.payment_reference,
       notes: payload.payment_reference,
-      transaction_id: transaction.id,
+      transaction_id: transactionResult.data.id,
     })
     .select("id")
     .single();
 
   if (error) {
-    await supabase.from("transactions").delete().eq("id", transaction.id);
+    await deleteTransaction(transactionResult.data.id);
     throw new Error(error.message);
   }
 

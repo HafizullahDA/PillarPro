@@ -2,7 +2,7 @@ type InputFieldProps = {
   id: string;
   label: string;
   name: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "email" | "password";
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;

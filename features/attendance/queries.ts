@@ -9,9 +9,18 @@ import type {
   WorkerInsert,
   WorkerListItem,
 } from "@/features/attendance/types";
+import {
+  createTransaction,
+  deleteTransaction,
+} from "@/lib/services/transaction-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  buildPaginationMeta,
+  normalizePagination,
+  type PaginatedResult,
+  type PaginationOptions,
+} from "@/lib/utils/pagination";
 import { getRelationName } from "@/lib/utils/supabase-relations";
-import { createTransactionRecord } from "@/services/transactions/create-transaction";
 
 export async function getWorkers(): Promise<WorkerListItem[]> {
   const supabase = createServerSupabaseClient();
@@ -33,6 +42,37 @@ export async function getWorkers(): Promise<WorkerListItem[]> {
     daily_rate: Number(row.daily_rate ?? 0),
     created_at: row.created_at,
   }));
+}
+
+export async function getWorkersPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<WorkerListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("workers")
+    .select("id, project_id, name, designation, daily_rate, created_at, projects(name)", {
+      count: "exact",
+    })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      name: row.name,
+      designation: row.designation ?? "",
+      daily_rate: Number(row.daily_rate ?? 0),
+      created_at: row.created_at,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
 }
 
 export async function createWorker(payload: WorkerInsert) {
@@ -75,6 +115,44 @@ export async function getAttendanceRecords(): Promise<AttendanceListItem[]> {
   }));
 }
 
+export async function getAttendanceRecordsPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<AttendanceListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const monthRange = getCurrentMonthRange();
+  const { data, error, count } = await supabase
+    .from("attendance")
+    .select(
+      "id, project_id, status, ot_hours, amount, attendance_date, workers(name), projects(name)",
+      { count: "exact" },
+    )
+    .gte("attendance_date", monthRange.from)
+    .lte("attendance_date", monthRange.to)
+    .order("attendance_date", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      worker_name: getRelationName(
+        row.workers as { name?: string } | { name?: string }[] | null,
+      ),
+      status: row.status,
+      ot_hours: Number(row.ot_hours ?? 0),
+      amount: Number(row.amount ?? 0),
+      attendance_date: row.attendance_date,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
+}
+
 export async function getAttendanceSummary(): Promise<AttendanceSummaryData> {
   const rows = await getAttendanceRecords();
 
@@ -103,16 +181,20 @@ export async function createAttendanceRecord(payload: AttendanceInsert) {
 
   const amount = payload.amount > 0 ? payload.amount : 0;
 
-  const transaction = await createTransactionRecord({
+  const transactionResult = await createTransaction({
     project_id: payload.project_id,
-    transaction_date: payload.attendance_date,
-    transaction_type: "salary_expense",
-    direction: "outflow",
+    type: "expense",
+    category: "salary_expense",
     amount,
-    reference_table: "attendance",
+    date: payload.attendance_date,
     reference_id: payload.id,
-    notes: `Salary expense for ${worker.name}`,
+    linked_id: payload.worker_id,
+    worker_id: payload.worker_id,
   });
+
+  if (!transactionResult.success) {
+    throw new Error(transactionResult.error);
+  }
 
   const { data, error } = await supabase
     .from("attendance")
@@ -126,13 +208,13 @@ export async function createAttendanceRecord(payload: AttendanceInsert) {
       overtime_units: payload.overtime_units,
       ot_hours: payload.ot_hours,
       amount,
-      transaction_id: transaction.id,
+      transaction_id: transactionResult.data.id,
     })
     .select("id")
     .single();
 
   if (error) {
-    await supabase.from("transactions").delete().eq("id", transaction.id);
+    await deleteTransaction(transactionResult.data.id);
     throw new Error(error.message);
   }
 

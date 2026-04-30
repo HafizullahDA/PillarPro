@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { ModuleTable, type ModuleTableColumn } from "@/components/lists/module-table";
 import type {
   VendorListItem,
   VendorPaymentListItem,
@@ -10,125 +9,100 @@ import { formatCurrency } from "@/lib/utils/formatters";
 type VendorDataTableProps =
   | {
       title: string;
+      description: string;
       emptyMessage: string;
+      totalCount?: number;
       type: "vendors";
       rows: VendorListItem[];
     }
   | {
       title: string;
+      description: string;
       emptyMessage: string;
+      totalCount?: number;
       type: "purchases";
       rows: VendorPurchaseListItem[];
     }
   | {
       title: string;
+      description: string;
       emptyMessage: string;
+      totalCount?: number;
       type: "payments";
       rows: VendorPaymentListItem[];
     };
 
+const vendorColumns: ModuleTableColumn<VendorListItem>[] = [
+  { key: "project", header: "Project", cell: (row) => row.project_name },
+  { key: "contact_person", header: "Contact", cell: (row) => row.contact_person || "No contact" },
+  { key: "phone", header: "Phone", cell: (row) => row.phone || "-" },
+];
+
+const purchaseColumns: ModuleTableColumn<VendorPurchaseListItem>[] = [
+  { key: "vendor", header: "Vendor", cell: (row) => row.vendor_name },
+  { key: "project", header: "Project", cell: (row) => row.project_name },
+  { key: "quantity", header: "Qty", cell: (row) => row.quantity },
+  { key: "rate", header: "Rate", cell: (row) => formatCurrency(row.rate) },
+  { key: "amount", header: "Amount", cell: (row) => formatCurrency(row.amount) },
+  { key: "date", header: "Date", cell: (row) => row.purchase_date },
+];
+
+const paymentColumns: ModuleTableColumn<VendorPaymentListItem>[] = [
+  { key: "vendor", header: "Vendor", cell: (row) => row.vendor_name },
+  { key: "project", header: "Project", cell: (row) => row.project_name },
+  { key: "amount", header: "Amount", cell: (row) => formatCurrency(row.amount) },
+  { key: "mode", header: "Mode", cell: (row) => row.payment_mode },
+  { key: "reference", header: "Reference", cell: (row) => row.payment_reference || "-" },
+  { key: "date", header: "Date", cell: (row) => row.payment_date },
+];
+
 export function VendorDataTable(props: VendorDataTableProps) {
+  if (props.type === "vendors") {
+    return (
+      <ModuleTable
+        title={props.title}
+        description={props.description}
+        emptyMessage={props.emptyMessage}
+        rows={props.rows}
+        totalCount={props.totalCount}
+        columns={vendorColumns}
+        getRowId={(row) => row.id}
+        mobileTitle={(row) => row.name}
+        mobileSubtitle={(row) => row.project_name}
+        mobileBadge={(row) => row.phone || "No phone"}
+      />
+    );
+  }
+
+  if (props.type === "purchases") {
+    return (
+      <ModuleTable
+        title={props.title}
+        description={props.description}
+        emptyMessage={props.emptyMessage}
+        rows={props.rows}
+        totalCount={props.totalCount}
+        columns={purchaseColumns}
+        getRowId={(row) => row.id}
+        mobileTitle={(row) => row.material}
+        mobileSubtitle={(row) => `${row.vendor_name} · ${row.project_name}`}
+        mobileBadge={(row) => formatCurrency(row.amount)}
+      />
+    );
+  }
+
   return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-[color:var(--foreground)]">{props.title}</h2>
-          <p className="mt-1 text-sm text-[color:var(--muted)]">{props.emptyMessage}</p>
-        </div>
-        <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[color:var(--foreground)]">
-          {props.rows.length}
-        </span>
-      </div>
-
-      {props.rows.length === 0 ? (
-        <EmptyState message={props.emptyMessage} />
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-[color:var(--border)]">
-          <div className="overflow-x-auto">
-            {props.type === "vendors" ? (
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[color:var(--surface-muted)] text-[color:var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Vendor</th>
-                    <th className="px-4 py-3 font-medium">Project</th>
-                    <th className="px-4 py-3 font-medium">Contact</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.rows.map((row) => (
-                    <tr key={row.id} className="border-t border-[color:var(--border)]">
-                      <td className="px-4 py-3 font-semibold">{row.name}</td>
-                      <td className="px-4 py-3">{row.project_name}</td>
-                      <td className="px-4 py-3">
-                        {row.contact_person || "No contact"}
-                        <div className="text-xs text-[color:var(--muted)]">{row.phone || "-"}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-
-            {props.type === "purchases" ? (
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[color:var(--surface-muted)] text-[color:var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Vendor</th>
-                    <th className="px-4 py-3 font-medium">Material</th>
-                    <th className="px-4 py-3 font-medium">Qty</th>
-                    <th className="px-4 py-3 font-medium">Rate</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.rows.map((row) => (
-                    <tr key={row.id} className="border-t border-[color:var(--border)]">
-                      <td className="px-4 py-3 font-semibold">
-                        {row.vendor_name}
-                        <div className="text-xs text-[color:var(--muted)]">{row.project_name}</div>
-                      </td>
-                      <td className="px-4 py-3">{row.material}</td>
-                      <td className="px-4 py-3">{row.quantity}</td>
-                      <td className="px-4 py-3">{formatCurrency(row.rate)}</td>
-                      <td className="px-4 py-3">{formatCurrency(row.amount)}</td>
-                      <td className="px-4 py-3">{row.purchase_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-
-            {props.type === "payments" ? (
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[color:var(--surface-muted)] text-[color:var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Vendor</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Mode</th>
-                    <th className="px-4 py-3 font-medium">Reference</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.rows.map((row) => (
-                    <tr key={row.id} className="border-t border-[color:var(--border)]">
-                      <td className="px-4 py-3 font-semibold">
-                        {row.vendor_name}
-                        <div className="text-xs text-[color:var(--muted)]">{row.project_name}</div>
-                      </td>
-                      <td className="px-4 py-3">{formatCurrency(row.amount)}</td>
-                      <td className="px-4 py-3">{row.payment_mode}</td>
-                      <td className="px-4 py-3">{row.payment_reference || "-"}</td>
-                      <td className="px-4 py-3">{row.payment_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-          </div>
-        </div>
-      )}
-    </Card>
+    <ModuleTable
+      title={props.title}
+      description={props.description}
+      emptyMessage={props.emptyMessage}
+      rows={props.rows}
+      totalCount={props.totalCount}
+      columns={paymentColumns}
+      getRowId={(row) => row.id}
+      mobileTitle={(row) => row.vendor_name}
+      mobileSubtitle={(row) => row.project_name}
+      mobileBadge={(row) => formatCurrency(row.amount)}
+    />
   );
 }

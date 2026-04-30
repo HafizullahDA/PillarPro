@@ -1,13 +1,16 @@
-import { createVendor, getVendors } from "@/features/vendors/queries";
+import { createVendor, getVendorsPage } from "@/features/vendors/queries";
 import {
   parseVendorPayload,
   VendorValidationError,
 } from "@/features/vendors/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const vendors = await getVendors();
+    const vendors = await getVendorsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(vendors);
   } catch (error) {
     return jsonError(error, "Failed to fetch vendors.");

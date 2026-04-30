@@ -5,9 +5,18 @@ import type {
   PartnerTransactionInsert,
   PartnerTransactionRow,
 } from "@/features/partners/types";
+import {
+  createTransaction,
+  deleteTransaction,
+} from "@/lib/services/transaction-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  buildPaginationMeta,
+  normalizePagination,
+  type PaginatedResult,
+  type PaginationOptions,
+} from "@/lib/utils/pagination";
 import { getRelationName } from "@/lib/utils/supabase-relations";
-import { createTransactionRecord } from "@/services/transactions/create-transaction";
 
 export async function getPartners(): Promise<PartnerListItem[]> {
   const supabase = createServerSupabaseClient();
@@ -27,6 +36,33 @@ export async function getPartners(): Promise<PartnerListItem[]> {
     name: row.name,
     created_at: row.created_at,
   }));
+}
+
+export async function getPartnersPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<PartnerListItem>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("partners")
+    .select("id, project_id, name, created_at, projects(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      project_id: row.project_id,
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      name: row.name,
+      created_at: row.created_at,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
 }
 
 export async function createPartner(payload: PartnerInsert) {
@@ -66,6 +102,41 @@ export async function getPartnerTransactions(): Promise<PartnerTransactionRow[]>
   }));
 }
 
+export async function getPartnerTransactionsPage(
+  options?: PaginationOptions,
+): Promise<PaginatedResult<PartnerTransactionRow>> {
+  const supabase = createServerSupabaseClient();
+  const { page, pageSize, from, to } = normalizePagination(options);
+  const { data, error, count } = await supabase
+    .from("partner_transactions")
+    .select(
+      "id, partner_id, entry_type, payment_mode, amount, transaction_date, partners(name), projects(name)",
+      { count: "exact" },
+    )
+    .order("transaction_date", { ascending: false })
+    .range(from, to);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    rows: (data ?? []).map((row) => ({
+      id: row.id,
+      partner_id: row.partner_id ?? "",
+      partner_name: getRelationName(
+        row.partners as { name?: string } | { name?: string }[] | null,
+      ),
+      project_name: getRelationName(
+        row.projects as { name?: string } | { name?: string }[] | null,
+      ),
+      entry_type: row.entry_type,
+      payment_mode: row.payment_mode ?? "",
+      amount: Number(row.amount ?? 0),
+      transaction_date: row.transaction_date,
+    })),
+    pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+  };
+}
+
 export async function createPartnerTransaction(payload: PartnerTransactionInsert) {
   const supabase = createServerSupabaseClient();
   const { data: partner, error: partnerError } = await supabase
@@ -76,17 +147,20 @@ export async function createPartnerTransaction(payload: PartnerTransactionInsert
 
   if (partnerError) throw new Error(partnerError.message);
 
-  const direction = payload.entry_type === "paid_by_partner" ? "inflow" : "outflow";
-  const transaction = await createTransactionRecord({
+  const transactionResult = await createTransaction({
     project_id: payload.project_id,
-    transaction_date: payload.transaction_date,
-    transaction_type: "partner",
-    direction,
+    type: "partner",
+    category: `partner_${payload.entry_type}`,
     amount: payload.amount,
-    reference_table: "partner_transactions",
+    date: payload.transaction_date,
     reference_id: payload.id,
-    notes: `Partner transaction for ${partner.name}`,
+    linked_id: payload.partner_id,
+    partner_id: payload.partner_id,
   });
+
+  if (!transactionResult.success) {
+    throw new Error(transactionResult.error);
+  }
 
   const { data, error } = await supabase
     .from("partner_transactions")
@@ -100,13 +174,13 @@ export async function createPartnerTransaction(payload: PartnerTransactionInsert
       amount: payload.amount,
       payment_mode: payload.payment_mode,
       notes: payload.payment_mode,
-      transaction_id: transaction.id,
+      transaction_id: transactionResult.data.id,
     })
     .select("id")
     .single();
 
   if (error) {
-    await supabase.from("transactions").delete().eq("id", transaction.id);
+    await deleteTransaction(transactionResult.data.id);
     throw new Error(error.message);
   }
 

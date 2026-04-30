@@ -3,6 +3,7 @@ import { DashboardCategoryTable } from "@/components/lists/dashboard-category-ta
 import { DashboardProjectTable } from "@/components/lists/dashboard-project-table";
 import { DashboardSummaryBlocks } from "@/components/lists/dashboard-summary-blocks";
 import {
+  getDashboardOutstandingAlerts,
   getDashboardCategoryGroups,
   getDashboardProjectGroups,
   getDashboardSummary,
@@ -11,8 +12,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [summary, projectGroups, categoryGroups] = await Promise.all([
+  const [summary, alerts, projectGroups, categoryGroups] = await Promise.all([
     getDashboardSummary(),
+    getDashboardOutstandingAlerts(),
     getDashboardProjectGroups(),
     getDashboardCategoryGroups(),
   ]);
@@ -21,9 +23,9 @@ export default async function DashboardPage() {
     <MobilePage
       eyebrow="Unified Dashboard"
       title="Dashboard"
-      description="Ledger-first summary powered by the transactions table with project and category grouping."
+      description="Finance-engine summary powered by the centralized ledger with project and category breakdowns."
     >
-      <DashboardSummaryBlocks summary={summary} />
+      <DashboardSummaryBlocks summary={summary} alerts={alerts} />
       <DashboardProjectTable rows={projectGroups} />
       <DashboardCategoryTable rows={categoryGroups} />
     </MobilePage>

@@ -6,18 +6,20 @@ import { PartnerTransactionTable } from "@/components/lists/partner-transaction-
 import { getProjects } from "@/features/projects/queries";
 import {
   getPartnerBalances,
-  getPartnerTransactions,
+  getPartnerTransactionsPage,
   getPartners,
+  getPartnersPage,
 } from "@/features/partners/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function PartnersPage() {
-  const [projects, partners, balances, transactions] = await Promise.all([
+  const [projects, partners, partnersPage, balances, transactions] = await Promise.all([
     getProjects(),
     getPartners(),
+    getPartnersPage(),
     getPartnerBalances(),
-    getPartnerTransactions(),
+    getPartnerTransactionsPage(),
   ]);
 
   return (
@@ -28,8 +30,11 @@ export default async function PartnersPage() {
     >
       <PartnerForm projects={projects} />
       <PartnerTransactionForm projects={projects} partners={partners} />
-      <PartnerBalanceTable rows={balances} />
-      <PartnerTransactionTable rows={transactions} />
+      <PartnerBalanceTable rows={balances} totalCount={partnersPage.pagination.total} />
+      <PartnerTransactionTable
+        rows={transactions.rows}
+        totalCount={transactions.pagination.total}
+      />
     </MobilePage>
   );
 }

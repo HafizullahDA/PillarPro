@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { ModuleTable, type ModuleTableColumn } from "@/components/lists/module-table";
 import type {
   AttendanceListItem,
   WorkerListItem,
@@ -8,103 +7,58 @@ import { formatCurrency } from "@/lib/utils/formatters";
 
 type WorkerAttendanceTableProps = {
   workers: WorkerListItem[];
+  workersTotalCount?: number;
   attendanceRows: AttendanceListItem[];
+  attendanceTotalCount?: number;
 };
+
+const workerColumns: ModuleTableColumn<WorkerListItem>[] = [
+  { key: "designation", header: "Designation", cell: (row) => row.designation },
+  { key: "rate", header: "Rate/day", cell: (row) => formatCurrency(row.daily_rate) },
+  { key: "project", header: "Project", cell: (row) => row.project_name },
+];
+
+const attendanceColumns: ModuleTableColumn<AttendanceListItem>[] = [
+  { key: "project", header: "Project", cell: (row) => row.project_name },
+  { key: "status", header: "Status", cell: (row) => row.status },
+  { key: "ot_hours", header: "OT hours", cell: (row) => row.ot_hours },
+  { key: "amount", header: "Amount", cell: (row) => formatCurrency(row.amount) },
+  { key: "date", header: "Date", cell: (row) => row.attendance_date },
+];
 
 export function WorkerAttendanceTable({
   workers,
+  workersTotalCount,
   attendanceRows,
+  attendanceTotalCount,
 }: WorkerAttendanceTableProps) {
   return (
     <>
-      <Card>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[color:var(--foreground)]">Workers</h2>
-            <p className="mt-1 text-sm text-[color:var(--muted)]">Worker master records.</p>
-          </div>
-          <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[color:var(--foreground)]">
-            {workers.length}
-          </span>
-        </div>
+      <ModuleTable
+        title="Workers"
+        description="Worker master records."
+        emptyMessage="No workers yet."
+        rows={workers}
+        totalCount={workersTotalCount}
+        columns={workerColumns}
+        getRowId={(row) => row.id}
+        mobileTitle={(row) => row.name}
+        mobileSubtitle={(row) => row.project_name}
+        mobileBadge={(row) => formatCurrency(row.daily_rate)}
+      />
 
-        {workers.length === 0 ? (
-          <EmptyState message="No workers yet." />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-[color:var(--border)]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[color:var(--surface-muted)] text-[color:var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Worker</th>
-                    <th className="px-4 py-3 font-medium">Designation</th>
-                    <th className="px-4 py-3 font-medium">Rate/day</th>
-                    <th className="px-4 py-3 font-medium">Project</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workers.map((worker) => (
-                    <tr key={worker.id} className="border-t border-[color:var(--border)]">
-                      <td className="px-4 py-3 font-semibold">{worker.name}</td>
-                      <td className="px-4 py-3">{worker.designation}</td>
-                      <td className="px-4 py-3">{formatCurrency(worker.daily_rate)}</td>
-                      <td className="px-4 py-3">{worker.project_name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-[color:var(--foreground)]">Attendance log</h2>
-            <p className="mt-1 text-sm text-[color:var(--muted)]">
-              Current month attendance with auto-calculated salary amount.
-            </p>
-          </div>
-          <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[color:var(--foreground)]">
-            {attendanceRows.length}
-          </span>
-        </div>
-
-        {attendanceRows.length === 0 ? (
-          <EmptyState message="No attendance yet." />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-[color:var(--border)]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[color:var(--surface-muted)] text-[color:var(--muted)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Worker</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">OT hours</th>
-                    <th className="px-4 py-3 font-medium">Amount</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendanceRows.map((row) => (
-                    <tr key={row.id} className="border-t border-[color:var(--border)]">
-                      <td className="px-4 py-3 font-semibold">
-                        {row.worker_name}
-                        <div className="text-xs text-[color:var(--muted)]">{row.project_name}</div>
-                      </td>
-                      <td className="px-4 py-3">{row.status}</td>
-                      <td className="px-4 py-3">{row.ot_hours}</td>
-                      <td className="px-4 py-3">{formatCurrency(row.amount)}</td>
-                      <td className="px-4 py-3">{row.attendance_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </Card>
+      <ModuleTable
+        title="Attendance log"
+        description="Current month attendance with auto-calculated salary amount."
+        emptyMessage="No attendance yet."
+        rows={attendanceRows}
+        totalCount={attendanceTotalCount}
+        columns={attendanceColumns}
+        getRowId={(row) => row.id}
+        mobileTitle={(row) => row.worker_name}
+        mobileSubtitle={(row) => row.project_name}
+        mobileBadge={(row) => formatCurrency(row.amount)}
+      />
     </>
   );
 }

@@ -1,16 +1,19 @@
 import {
   createMiscExpense,
-  getMiscExpenses,
+  getMiscExpensesPage,
 } from "@/features/misc-expenses/queries";
 import {
   MiscExpenseValidationError,
   parseMiscExpensePayload,
 } from "@/features/misc-expenses/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const expenses = await getMiscExpenses();
+    const expenses = await getMiscExpensesPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(expenses);
   } catch (error) {
     return jsonError(error, "Failed to fetch miscellaneous records.");

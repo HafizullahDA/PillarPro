@@ -2,14 +2,14 @@ import { MiscExpenseForm } from "@/components/forms/misc-expense-form";
 import { MiscExpensesTable } from "@/components/lists/misc-expenses-table";
 import { MobilePage } from "@/components/layout/mobile-page";
 import { getProjects } from "@/features/projects/queries";
-import { getMiscExpenses } from "@/features/misc-expenses/queries";
+import { getMiscExpensesPage } from "@/features/misc-expenses/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExpensesPage() {
   const [projects, expenses] = await Promise.all([
     getProjects(),
-    getMiscExpenses(),
+    getMiscExpensesPage(),
   ]);
 
   return (
@@ -19,7 +19,10 @@ export default async function ExpensesPage() {
       description="Track fuel, equipment, tendering, and site expenses with automatic ledger entries."
     >
       <MiscExpenseForm projects={projects} />
-      <MiscExpensesTable rows={expenses} />
+      <MiscExpensesTable
+        rows={expenses.rows}
+        totalCount={expenses.pagination.total}
+      />
     </MobilePage>
   );
 }

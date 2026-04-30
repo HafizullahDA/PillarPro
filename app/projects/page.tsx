@@ -1,12 +1,12 @@
 import { ProjectForm } from "@/components/forms/project-form";
 import { MobilePage } from "@/components/layout/mobile-page";
 import { ProjectList } from "@/components/lists/project-list";
-import { getProjects } from "@/features/projects/queries";
+import { getProjectsPage } from "@/features/projects/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
-  const projects = await getProjects();
+  const projects = await getProjectsPage();
 
   return (
     <MobilePage
@@ -15,7 +15,10 @@ export default async function ProjectsPage() {
       description="Create and review project records for PillarPro."
     >
       <ProjectForm />
-      <ProjectList projects={projects} />
+      <ProjectList
+        projects={projects.rows}
+        totalCount={projects.pagination.total}
+      />
     </MobilePage>
   );
 }

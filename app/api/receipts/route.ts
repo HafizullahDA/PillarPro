@@ -1,13 +1,16 @@
-import { createReceipt, getReceipts } from "@/features/receivables/queries";
+import { createReceipt, getReceiptsPage } from "@/features/receivables/queries";
 import {
   parseReceiptPayload,
   ReceivableValidationError,
 } from "@/features/receivables/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const receipts = await getReceipts();
+    const receipts = await getReceiptsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(receipts);
   } catch (error) {
     return jsonError(error, "Failed to fetch payments.");

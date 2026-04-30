@@ -1,13 +1,16 @@
-import { createBill, getBills } from "@/features/receivables/queries";
+import { createBill, getBillsPage } from "@/features/receivables/queries";
 import {
   parseBillPayload,
   ReceivableValidationError,
 } from "@/features/receivables/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const bills = await getBills();
+    const bills = await getBillsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(bills);
   } catch (error) {
     return jsonError(error, "Failed to fetch bills.");

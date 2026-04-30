@@ -1,16 +1,19 @@
 import {
   createVendorPurchase,
-  getVendorPurchases,
+  getVendorPurchasesPage,
 } from "@/features/vendors/queries";
 import {
   parseVendorPurchasePayload,
   VendorValidationError,
 } from "@/features/vendors/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const purchases = await getVendorPurchases();
+    const purchases = await getVendorPurchasesPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(purchases);
   } catch (error) {
     return jsonError(error, "Failed to fetch purchases.");

@@ -7,17 +7,20 @@ import { ProjectReceivableDashboard } from "@/components/lists/project-receivabl
 import { getProjects } from "@/features/projects/queries";
 import {
   getBills,
+  getBillsPage,
   getProjectReceivableSummaries,
   getReceipts,
+  getReceiptsPage,
 } from "@/features/receivables/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceivablesPage() {
-  const [projects, bills, receipts, summaries] = await Promise.all([
+  const [projects, bills, billsPage, receiptsPage, summaries] = await Promise.all([
     getProjects(),
     getBills(),
-    getReceipts(),
+    getBillsPage(),
+    getReceiptsPage(),
     getProjectReceivableSummaries(),
   ]);
 
@@ -30,8 +33,8 @@ export default async function ReceivablesPage() {
       <ProjectReceivableDashboard summaries={summaries} />
       <BillForm projects={projects} />
       <ReceiptForm projects={projects} bills={bills} />
-      <BillsTable rows={bills} />
-      <PaymentsTable rows={receipts} />
+      <BillsTable rows={billsPage.rows} totalCount={billsPage.pagination.total} />
+      <PaymentsTable rows={receiptsPage.rows} totalCount={receiptsPage.pagination.total} />
     </MobilePage>
   );
 }

@@ -1,13 +1,16 @@
-import { createPartner, getPartners } from "@/features/partners/queries";
+import { createPartner, getPartnersPage } from "@/features/partners/queries";
 import {
   parsePartnerPayload,
   PartnerValidationError,
 } from "@/features/partners/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const partners = await getPartners();
+    const partners = await getPartnersPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(partners);
   } catch (error) {
     return jsonError(error, "Failed to fetch partners.");

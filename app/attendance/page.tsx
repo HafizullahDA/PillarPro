@@ -5,19 +5,21 @@ import { WorkerAttendanceTable } from "@/components/lists/worker-attendance-tabl
 import { MobilePage } from "@/components/layout/mobile-page";
 import { getCurrentMonthLabel } from "@/features/attendance/calculations";
 import {
-  getAttendanceRecords,
+  getAttendanceRecordsPage,
   getAttendanceSummary,
   getWorkers,
+  getWorkersPage,
 } from "@/features/attendance/queries";
 import { getProjects } from "@/features/projects/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AttendancePage() {
-  const [projects, workers, attendanceRows, summary] = await Promise.all([
+  const [projects, workers, workersPage, attendanceRows, summary] = await Promise.all([
     getProjects(),
     getWorkers(),
-    getAttendanceRecords(),
+    getWorkersPage(),
+    getAttendanceRecordsPage(),
     getAttendanceSummary(),
   ]);
 
@@ -35,7 +37,12 @@ export default async function AttendancePage() {
         totalOtHours={summary.totalOtHours}
         totalAmount={summary.totalAmount}
       />
-      <WorkerAttendanceTable workers={workers} attendanceRows={attendanceRows} />
+      <WorkerAttendanceTable
+        workers={workersPage.rows}
+        workersTotalCount={workersPage.pagination.total}
+        attendanceRows={attendanceRows.rows}
+        attendanceTotalCount={attendanceRows.pagination.total}
+      />
     </MobilePage>
   );
 }

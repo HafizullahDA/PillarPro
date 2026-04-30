@@ -1,16 +1,19 @@
 import {
   createVendorPayment,
-  getVendorPayments,
+  getVendorPaymentsPage,
 } from "@/features/vendors/queries";
 import {
   parseVendorPaymentPayload,
   VendorValidationError,
 } from "@/features/vendors/validators";
 import { jsonData, jsonError } from "@/lib/utils/api-response";
+import { parsePaginationParams } from "@/lib/utils/pagination";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const payments = await getVendorPayments();
+    const payments = await getVendorPaymentsPage(
+      parsePaginationParams(new URL(request.url).searchParams),
+    );
     return jsonData(payments);
   } catch (error) {
     return jsonError(error, "Failed to fetch payments.");
