@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getUserDisplayName } from "@/lib/auth/user-display-name";
 
 type MobilePageProps = {
   eyebrow: string;
@@ -17,10 +18,7 @@ export async function MobilePage({
   children,
 }: MobilePageProps) {
   const user = await getCurrentUser();
-  const userName =
-    typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
-      ? user.user_metadata.name
-      : user?.email ?? "User";
+  const userName = getUserDisplayName(user);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 pb-24 pt-6 sm:max-w-2xl sm:px-6">

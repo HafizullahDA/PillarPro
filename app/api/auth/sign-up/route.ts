@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       options: {
         data: {
           name: payload.name,
+          full_name: payload.name,
         },
         emailRedirectTo: createRedirectUrl("/auth/callback"),
       },

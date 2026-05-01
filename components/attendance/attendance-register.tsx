@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
+import type { Dispatch, FormEvent, ReactNode, SetStateAction } from "react";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type {
@@ -36,22 +36,6 @@ type WorkerFormState = {
   daily_rate: string;
 };
 
-const draftCycle: Array<DraftStatus | null> = ["present", "absent", "half-day", null];
-
-const statusStyles: Record<
-  DraftStatus | "locked-present" | "locked-absent" | "locked-half-day" | "locked-overtime",
-  string
-> = {
-  present: "border-[#2d7b43] bg-[#2d7b43] text-white",
-  absent: "border-[#b1382f] bg-[#b1382f] text-white",
-  "half-day": "border-[#d17f2c] bg-[#d17f2c] text-white",
-  overtime: "border-[#1e4aa6] bg-[#1e4aa6] text-white",
-  "locked-present": "border-[#2d7b43] bg-[#2d7b43] text-white",
-  "locked-absent": "border-[#b1382f] bg-[#b1382f] text-white",
-  "locked-half-day": "border-[#d17f2c] bg-[#d17f2c] text-white",
-  "locked-overtime": "border-[#1e4aa6] bg-[#1e4aa6] text-white",
-};
-
 const statusLabels: Record<DraftStatus, string> = {
   present: "P",
   absent: "A",
@@ -65,6 +49,22 @@ const statusNames: Record<DraftStatus, string> = {
   "half-day": "Half Day",
   overtime: "Overtime",
 };
+
+const statusStyles: Record<DraftStatus, string> = {
+  present: "border-[#1f7a46] bg-[#1f7a46] text-white",
+  absent: "border-[#b42318] bg-[#b42318] text-white",
+  "half-day": "border-[#b76b1f] bg-[#b76b1f] text-white",
+  overtime: "border-[#2454a6] bg-[#2454a6] text-white",
+};
+
+const softStatusStyles: Record<DraftStatus, string> = {
+  present: "border-[#9ed5b3] bg-[#ecf9f0] text-[#14532d]",
+  absent: "border-[#f0b8b3] bg-[#fff1f0] text-[#9f241b]",
+  "half-day": "border-[#f0c896] bg-[#fff7e8] text-[#8a4b0f]",
+  overtime: "border-[#b8c9ef] bg-[#eff5ff] text-[#1f4b99]",
+};
+
+const statusOptions: DraftStatus[] = ["present", "absent", "half-day", "overtime"];
 
 const emptyWorkerForm = (projectId: string): WorkerFormState => ({
   project_id: projectId,
@@ -84,6 +84,10 @@ export function AttendanceRegister({
 }: AttendanceRegisterProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const days = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
+  const [selectedDate, setSelectedDate] = useState(() =>
+    getInitialSelectedDate(selectedMonth, days),
+  );
   const [drafts, setDrafts] = useState<Record<string, DraftEntry>>({});
   const [selectedCellKey, setSelectedCellKey] = useState("");
   const [showWorkerForm, setShowWorkerForm] = useState(false);
@@ -96,7 +100,6 @@ export function AttendanceRegister({
   const [registerError, setRegisterError] = useState("");
   const [workerError, setWorkerError] = useState("");
 
-  const days = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
 
@@ -129,16 +132,37 @@ export function AttendanceRegister({
     return map;
   }, [filteredAttendance]);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const daySummary = useMemo(() => {
+    const rows = filteredWorkers.map((worker) => {
+      const key = buildCellKey(worker.id, selectedDate);
+      const existing = attendanceMap.get(key);
+      const draft = drafts[key];
+      const status = existing ? normalizeStatus(existing.status) : draft?.status ?? null;
 
-  const summary = useMemo(() => {
-    const todayRows = filteredAttendance.filter((row) => row.attendance_date === today);
+      return { worker, key, existing, draft, status };
+    });
+
     return {
-      totalWorkers: filteredWorkers.length,
-      presentToday: todayRows.filter((row) => row.status !== "absent").length,
-      dailyCost: todayRows.reduce((total, row) => total + row.amount, 0),
+      rows,
+      present: rows.filter((row) => row.status && row.status !== "absent").length,
+      absent: rows.filter((row) => row.status === "absent").length,
+      unmarked: rows.filter((row) => !row.status).length,
+      cost: rows.reduce((total, row) => {
+        if (row.existing) return total + row.existing.amount;
+        if (row.draft) {
+          return (
+            total +
+            calculateDraftAmount(
+              row.worker.daily_rate,
+              row.draft.status,
+              Number(row.draft.otHours || 0),
+            )
+          );
+        }
+        return total;
+      }, 0),
     };
-  }, [filteredAttendance, filteredWorkers.length, today]);
+  }, [attendanceMap, drafts, filteredWorkers, selectedDate]);
 
   const registerRows = useMemo(
     () =>
@@ -169,7 +193,7 @@ export function AttendanceRegister({
 
   const selectedDraft = selectedCellKey ? drafts[selectedCellKey] : undefined;
   const selectedExistingRow = selectedCellKey ? attendanceMap.get(selectedCellKey) : undefined;
-  const selectedWorker = selectedDraft ? workerById.get(selectedDraft.workerId) : undefined;
+  const pendingCount = Object.keys(drafts).length;
 
   function handleProjectChange(projectId: string) {
     setDrafts({});
@@ -184,9 +208,7 @@ export function AttendanceRegister({
   }
 
   function handleMonthChange(month: string) {
-    if (!month) {
-      return;
-    }
+    if (!month) return;
 
     setDrafts({});
     setSelectedCellKey("");
@@ -197,49 +219,50 @@ export function AttendanceRegister({
     router.push(`${pathname}?${nextParams.toString()}`);
   }
 
-  function handleCellClick(workerId: string, date: string) {
-    const key = buildCellKey(workerId, date);
+  function handleDateChange(date: string) {
+    if (!days.some((day) => day.date === date)) return;
+    setSelectedDate(date);
+    setSelectedCellKey("");
+    setRegisterError("");
+  }
+
+  function moveSelectedDate(direction: -1 | 1) {
+    const currentIndex = days.findIndex((day) => day.date === selectedDate);
+    const nextDay = days[currentIndex + direction];
+    if (nextDay) {
+      handleDateChange(nextDay.date);
+    }
+  }
+
+  function updateDraft(workerId: string, status: DraftStatus) {
+    const key = buildCellKey(workerId, selectedDate);
+
     if (attendanceMap.has(key)) {
       setSelectedCellKey(key);
       return;
     }
 
-    setDrafts((current) => {
-      const next = { ...current };
-      const existing = next[key];
-      const nextStatus = getNextDraftStatus(existing?.status ?? null);
-
-      if (!nextStatus) {
-        delete next[key];
-      } else {
-        next[key] = {
-          workerId,
-          date,
-          status: nextStatus,
-          otHours: existing?.otHours ?? "0",
-        };
-      }
-
-      return next;
-    });
+    setDrafts((current) => ({
+      ...current,
+      [key]: {
+        workerId,
+        date: selectedDate,
+        status,
+        otHours: current[key]?.otHours ?? "0",
+      },
+    }));
     setSelectedCellKey(key);
     setRegisterError("");
   }
 
-  function updateSelectedDraftStatus(status: DraftStatus) {
-    if (!selectedDraft) return;
-    setDrafts((current) => ({
-      ...current,
-      [selectedCellKey]: { ...current[selectedCellKey], status },
-    }));
-  }
-
-  function updateSelectedDraftOtHours(otHours: string) {
-    if (!selectedDraft) return;
-    setDrafts((current) => ({
-      ...current,
-      [selectedCellKey]: { ...current[selectedCellKey], otHours },
-    }));
+  function clearDraft(workerId: string) {
+    const key = buildCellKey(workerId, selectedDate);
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setSelectedCellKey("");
   }
 
   async function handleSaveRegister() {
@@ -249,7 +272,7 @@ export function AttendanceRegister({
     });
 
     if (!draftEntries.length) {
-      setRegisterError("Select at least one empty day cell before saving.");
+      setRegisterError("Mark attendance for at least one worker before saving.");
       return;
     }
 
@@ -340,9 +363,7 @@ export function AttendanceRegister({
       "Remove this worker? Workers with saved attendance cannot be removed.",
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setRegisterError("");
 
@@ -401,236 +422,254 @@ export function AttendanceRegister({
     URL.revokeObjectURL(url);
   }
 
-  const pendingCount = Object.keys(drafts).length;
-
   return (
-    <section className="overflow-hidden rounded-[32px] border-[6px] border-[#aeb6c6] bg-white shadow-[0_28px_80px_rgba(39,56,96,0.18)]">
-      <div className="border-b border-[#d8deea] bg-[#f7f9fc] px-4 py-3 sm:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-8 w-8 flex-col items-center justify-center gap-1 rounded-full border border-[#dbe3f0] bg-white text-[#27458f]">
-              <span className="block h-[1.5px] w-3 rounded-full bg-current" />
-              <span className="block h-[1.5px] w-3 rounded-full bg-current" />
-              <span className="block h-[1.5px] w-3 rounded-full bg-current" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <FieldShell label="Project">
-                  <select
-                    value={selectedProjectId}
-                    onChange={(event) => handleProjectChange(event.target.value)}
-                    className="h-11 w-full rounded-[10px] border border-[#cfd8e8] bg-white px-3 text-sm font-semibold text-[#27458f] outline-none focus:border-[#28479a]"
-                  >
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                  </select>
-                </FieldShell>
-                <FieldShell label="Register Month">
-                  <input
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(event) => handleMonthChange(event.target.value)}
-                    className="h-11 w-full rounded-[10px] border border-[#cfd8e8] bg-white px-3 text-sm font-semibold text-[#27458f] outline-none focus:border-[#28479a]"
-                  />
-                </FieldShell>
-              </div>
-              <p className="mt-2 text-xs text-[#75819b]">
-                Construction workforce register for {monthLabel}
-              </p>
-            </div>
+    <section className="overflow-hidden rounded-[28px] border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[0_22px_70px_rgba(64,42,16,0.14)]">
+      <div className="border-b border-[color:var(--border)] bg-[color:var(--surface-muted)] px-4 py-4 sm:px-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--accent)]">
+              Daily Crew Attendance
+            </p>
+            <h2 className="mt-1 truncate text-xl font-bold text-[color:var(--foreground)]">
+              {selectedProject?.name ?? "No project selected"}
+            </h2>
+            <p className="mt-1 text-sm text-[color:var(--muted)]">
+              Mark one site day at a time for {monthLabel}.
+            </p>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#dbe3f0] bg-[#fff7d7] text-xs font-bold text-[#5d4a06]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] text-xs font-bold text-[color:var(--primary)]">
             {getInitials(userName)}
           </div>
         </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <FieldShell label="Project">
+            <select
+              value={selectedProjectId}
+              onChange={(event) => handleProjectChange(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-sm font-semibold text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </FieldShell>
+          <FieldShell label="Month">
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(event) => handleMonthChange(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-sm font-semibold text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
+            />
+          </FieldShell>
+        </div>
       </div>
 
-      <div className="space-y-4 bg-white px-4 py-4 sm:px-6 sm:py-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <DashboardStat label="Total Workers" value={String(summary.totalWorkers)} />
-          <DashboardStat label="Present Today" value={String(summary.presentToday)} valueClassName="text-[#0f8c4b]" />
-          <DashboardStat label="Daily Cost" value={formatCurrency(summary.dailyCost)} />
-          <DashboardStat
-            label="Current Project"
-            value={selectedProject?.name ?? "No project"}
-            valueClassName="text-[#1f2d4d]"
-          />
-          <label className="rounded-[6px] border border-[#d8deea] bg-[#fbfcff] px-3 py-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6f7e99]">
-              Register Month
-            </span>
-            <p className="mt-1 truncate text-sm font-semibold text-[#1f2d4d]">{monthLabel}</p>
-          </label>
+      <div className="space-y-5 px-4 py-4 sm:px-6 sm:py-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <DashboardStat label="Workers" value={String(filteredWorkers.length)} />
+          <DashboardStat label="On Site" value={String(daySummary.present)} valueClassName="text-[color:var(--primary)]" />
+          <DashboardStat label="Unmarked" value={String(daySummary.unmarked)} />
+          <DashboardStat label="Day Cost" value={formatCurrency(daySummary.cost)} />
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-[#5f6f8d]">
-          <LegendDot label="Present" className="bg-[#2d7b43]" />
-          <LegendDot label="Absent" className="bg-[#b1382f]" />
-          <LegendDot label="Half Day" className="bg-[#d17f2c]" />
-          <LegendDot label="Overtime" className="bg-[#1e4aa6]" />
+        <div className="rounded-3xl border border-[color:var(--border)] bg-white/70 p-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => moveSelectedDate(-1)}
+              disabled={days[0]?.date === selectedDate}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] text-lg font-bold text-[color:var(--foreground)] disabled:opacity-40"
+              aria-label="Previous day"
+            >
+              ‹
+            </button>
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Attendance date</span>
+              <input
+                type="date"
+                value={selectedDate}
+                min={days[0]?.date}
+                max={days[days.length - 1]?.date}
+                onChange={(event) => handleDateChange(event.target.value)}
+                className="h-11 w-full rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-center text-sm font-bold text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => moveSelectedDate(1)}
+              disabled={days[days.length - 1]?.date === selectedDate}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] text-lg font-bold text-[color:var(--foreground)] disabled:opacity-40"
+              aria-label="Next day"
+            >
+              ›
+            </button>
+          </div>
+
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {days.map((day) => {
+              const active = day.date === selectedDate;
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => handleDateChange(day.date)}
+                  className={`min-w-[58px] rounded-2xl border px-2 py-2 text-center transition ${
+                    active
+                      ? "border-[color:var(--primary)] bg-[color:var(--primary)] text-[color:var(--primary-foreground)]"
+                      : "border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  }`}
+                >
+                  <span className="block text-sm font-bold">{day.day}</span>
+                  <span className="block text-[10px] font-semibold uppercase">{day.weekday}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="overflow-x-auto rounded-[8px] border border-[#d8deea]">
-          <table className="min-w-[1200px] border-separate border-spacing-0 text-xs text-[#233252]">
-            <thead>
-              <tr className="bg-[#0f224f] text-white">
-                <StickyHeader className="left-0 z-30 min-w-[68px]">S.No</StickyHeader>
-                <StickyHeader className="left-[68px] z-30 min-w-[180px]">Name Of Worker</StickyHeader>
-                {days.map((day) => (
-                  <th key={day.date} className="min-w-[62px] border-r border-[#233866] px-2 py-3 text-center text-[10px] font-bold uppercase">
-                    {day.label}
-                  </th>
-                ))}
-                <th className="min-w-[72px] border-r border-[#233866] px-2 py-3 text-center text-[10px] font-bold uppercase">Total</th>
-                <th className="min-w-[72px] border-r border-[#233866] px-2 py-3 text-center text-[10px] font-bold uppercase">Rate</th>
-                <th className="min-w-[92px] border-r border-[#233866] px-2 py-3 text-center text-[10px] font-bold uppercase">Amount</th>
-                <th className="min-w-[88px] px-2 py-3 text-center text-[10px] font-bold uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {registerRows.length ? (
-                registerRows.map((row) => (
-                  <tr key={row.worker.id} className="bg-white">
-                    <StickyCell className="left-0 z-20 text-center font-semibold">{row.index}</StickyCell>
-                    <StickyCell className="left-[68px] z-20 font-semibold text-[#27458f]">
-                      <div>{row.worker.name}</div>
-                      <div className="mt-1 text-[10px] font-medium text-[#7d8ba4]">
-                        {row.worker.designation}
+        <div className="space-y-3">
+          {daySummary.rows.length ? (
+            daySummary.rows.map(({ worker, existing, draft, status, key }) => (
+              <article
+                key={worker.id}
+                className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4 shadow-[0_10px_32px_rgba(64,42,16,0.08)]"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[color:var(--surface-muted)] text-sm font-bold text-[color:var(--primary)]">
+                    {getInitials(worker.name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-base font-bold text-[color:var(--foreground)]">
+                          {worker.name}
+                        </h3>
+                        <p className="mt-0.5 text-xs text-[color:var(--muted)]">
+                          {worker.designation || "Worker"} · {formatCurrency(worker.daily_rate)}/day
+                        </p>
                       </div>
-                    </StickyCell>
-                    {days.map((day) => {
-                      const key = buildCellKey(row.worker.id, day.date);
-                      const existing = attendanceMap.get(key);
-                      const draft = drafts[key];
-                      const isSelected = selectedCellKey === key;
+                      {status ? (
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${softStatusStyles[status]}`}>
+                          {statusNames[status]}
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-[color:var(--border)] bg-white px-2.5 py-1 text-[11px] font-bold text-[color:var(--muted)]">
+                          Not marked
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                      return (
-                        <td key={key} className="border-b border-r border-[#edf1f7] px-2 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleCellClick(row.worker.id, day.date)}
-                            className={`mx-auto flex h-7 min-w-7 items-center justify-center rounded-full border text-[10px] font-bold transition ${
-                              existing
-                                ? statusStyles[`locked-${normalizeStatus(existing.status)}`]
-                                : draft
-                                  ? statusStyles[draft.status]
-                                  : "border-[#d5ddeb] bg-white text-[#9aa6bf]"
-                            } ${isSelected ? "ring-2 ring-[#88a7ff] ring-offset-1" : ""}`}
-                            title={
-                              existing
-                                ? `${statusNames[normalizeStatus(existing.status)]} saved`
-                                : draft
-                                  ? `${statusNames[draft.status]} draft`
-                                  : "Click to cycle status"
-                            }
-                          >
-                            {existing
-                              ? statusLabels[normalizeStatus(existing.status)]
-                              : draft
-                                ? statusLabels[draft.status]
-                                : "-"}
-                          </button>
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-r border-[#edf1f7] px-2 py-2 text-center font-semibold">
-                      {row.totalUnits.toFixed(1)}
-                    </td>
-                    <td className="border-b border-r border-[#edf1f7] px-2 py-2 text-center text-[#667693]">
-                      {formatCurrency(row.worker.daily_rate)}
-                    </td>
-                    <td className="border-b border-r border-[#edf1f7] px-2 py-2 text-center font-bold text-[#1743a2]">
-                      {formatCurrency(row.amount)}
-                    </td>
-                    <td className="border-b border-[#edf1f7] px-2 py-2 text-center">
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {statusOptions.map((option) => {
+                    const selected = status === option;
+                    const locked = Boolean(existing);
+                    return (
                       <button
+                        key={option}
                         type="button"
-                        onClick={() => handleRemoveWorker(row.worker.id)}
-                        className="rounded-full border border-[#e5b6b1] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#b1382f]"
+                        disabled={locked}
+                        onClick={() => updateDraft(worker.id, option)}
+                        className={`min-h-12 rounded-2xl border px-3 text-sm font-bold transition disabled:cursor-not-allowed ${
+                          selected
+                            ? statusStyles[option]
+                            : "border-[color:var(--border)] bg-white text-[color:var(--foreground)]"
+                        } ${locked && !selected ? "opacity-50" : ""}`}
                       >
-                        Remove
+                        {statusNames[option]}
                       </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={days.length + 6} className="px-4 py-10 text-center text-sm text-[#71809c]">
-                    No workers found for this project yet.
-                  </td>
-                </tr>
-              )}
-              <tr>
-                <td colSpan={days.length + 6} className="border-t border-dashed border-[#d7deea] px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowWorkerForm((current) => !current)}
-                    className="mx-auto flex items-center gap-2 text-sm font-semibold text-[#28458f]"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current">+</span>
-                    Add New Worker
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    );
+                  })}
+                </div>
+
+                {draft?.status === "overtime" ? (
+                  <label className="mt-3 block">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                      Overtime Hours
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={draft.otHours}
+                      onChange={(event) => updateSelectedDraftOtHoursForKey(key, event.target.value, setDrafts)}
+                      className="mt-2 h-12 w-full rounded-2xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
+                    />
+                  </label>
+                ) : null}
+
+                <div className="mt-4 flex items-center justify-between gap-3 border-t border-[color:var(--border)] pt-3 text-xs text-[color:var(--muted)]">
+                  <span>
+                    {existing
+                      ? `Saved · ${formatCurrency(existing.amount)}`
+                      : draft
+                        ? `Draft · ${formatCurrency(calculateDraftAmount(worker.daily_rate, draft.status, Number(draft.otHours || 0)))}`
+                        : "Tap a status to mark this worker"}
+                  </span>
+                  {existing ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCellKey(key)}
+                      className="font-bold text-[color:var(--primary)]"
+                    >
+                      Details
+                    </button>
+                  ) : draft ? (
+                    <button
+                      type="button"
+                      onClick={() => clearDraft(worker.id)}
+                      className="font-bold text-[color:var(--danger)]"
+                    >
+                      Clear
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWorker(worker.id)}
+                      className="font-bold text-[color:var(--danger)]"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed border-[color:var(--border)] bg-white/60 px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-[color:var(--foreground)]">
+                No workers found for this project yet.
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--muted)]">
+                Add a worker below to start marking attendance.
+              </p>
+            </div>
+          )}
         </div>
 
         {selectedDraft ? (
-          <div className="rounded-[10px] border border-[#d8deea] bg-[#f7f9fd] p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#1f2d4d]">
-                  Drafting {selectedWorker?.name ?? "worker"} for {formatDateLabel(selectedDraft.date)}
-                </p>
-                <p className="mt-1 text-xs text-[#6f7e99]">
-                  Click status chips to fine-tune the selected cell before saving the register.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(statusLabels) as DraftStatus[]).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() => updateSelectedDraftStatus(status)}
-                    className={`rounded-full border px-3 py-2 text-xs font-bold ${
-                      selectedDraft.status === status
-                        ? statusStyles[status]
-                        : "border-[#d5ddeb] bg-white text-[#5f6f8d]"
-                    }`}
-                  >
-                    {statusNames[status]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {selectedDraft.status === "overtime" ? (
-              <label className="mt-4 block max-w-[220px]">
-                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#6f7e99]">
-                  OT Hours
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={selectedDraft.otHours}
-                  onChange={(event) => updateSelectedDraftOtHours(event.target.value)}
-                  className="mt-2 h-11 w-full rounded-[8px] border border-[#d5ddeb] bg-white px-3 text-sm text-[#1f2d4d] outline-none focus:border-[#27458f]"
-                />
-              </label>
-            ) : null}
+          <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-4 text-sm text-[color:var(--foreground)]">
+            Draft selected for {formatDateLabel(selectedDraft.date)}. Save the register to post it to attendance and transactions.
           </div>
         ) : selectedExistingRow ? (
-          <div className="rounded-[10px] border border-[#d8deea] bg-[#f7f9fd] p-4 text-sm text-[#5f6f8d]">
-            Saved entry for {selectedExistingRow.worker_name} on {formatDateLabel(selectedExistingRow.attendance_date)}.
+          <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-4 text-sm text-[color:var(--foreground)]">
+            Saved entry for {selectedExistingRow.worker_name} on {formatDateLabel(selectedExistingRow.attendance_date)} · {statusNames[normalizeStatus(selectedExistingRow.status)]} · {formatCurrency(selectedExistingRow.amount)}.
           </div>
         ) : null}
 
+        <button
+          type="button"
+          onClick={() => setShowWorkerForm((current) => !current)}
+          className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-[color:var(--primary)] bg-white px-4 text-sm font-bold text-[color:var(--primary)]"
+        >
+          {showWorkerForm ? "Close Worker Form" : "Add New Worker"}
+        </button>
+
         {showWorkerForm ? (
-          <form onSubmit={handleCreateWorker} className="rounded-[10px] border border-[#d8deea] bg-[#fbfcff] p-4">
+          <form onSubmit={handleCreateWorker} className="rounded-3xl border border-[color:var(--border)] bg-white p-4">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <FieldShell label="Project" error={workerErrors.project_id}>
                 <select
@@ -638,7 +677,7 @@ export function AttendanceRegister({
                   onChange={(event) =>
                     setWorkerForm((current) => ({ ...current, project_id: event.target.value }))
                   }
-                  className="h-11 w-full rounded-[8px] border border-[#d5ddeb] bg-white px-3 text-sm text-[#1f2d4d] outline-none focus:border-[#27458f]"
+                  className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--foreground)] outline-none focus:border-[color:var(--primary)]"
                 >
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
@@ -654,7 +693,7 @@ export function AttendanceRegister({
                     setWorkerForm((current) => ({ ...current, name: event.target.value }))
                   }
                   placeholder="John Doe"
-                  className="h-11 w-full rounded-[8px] border border-[#d5ddeb] bg-white px-3 text-sm text-[#1f2d4d] outline-none placeholder:text-[#96a3bb] focus:border-[#27458f]"
+                  className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted)] focus:border-[color:var(--primary)]"
                 />
               </FieldShell>
               <FieldShell label="Designation" error={workerErrors.designation}>
@@ -664,7 +703,7 @@ export function AttendanceRegister({
                     setWorkerForm((current) => ({ ...current, designation: event.target.value }))
                   }
                   placeholder="Mason"
-                  className="h-11 w-full rounded-[8px] border border-[#d5ddeb] bg-white px-3 text-sm text-[#1f2d4d] outline-none placeholder:text-[#96a3bb] focus:border-[#27458f]"
+                  className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted)] focus:border-[color:var(--primary)]"
                 />
               </FieldShell>
               <FieldShell label="Rate / Day" error={workerErrors.daily_rate}>
@@ -677,23 +716,23 @@ export function AttendanceRegister({
                     setWorkerForm((current) => ({ ...current, daily_rate: event.target.value }))
                   }
                   placeholder="0.00"
-                  className="h-11 w-full rounded-[8px] border border-[#d5ddeb] bg-white px-3 text-sm text-[#1f2d4d] outline-none placeholder:text-[#96a3bb] focus:border-[#27458f]"
+                  className="h-12 w-full rounded-2xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted)] focus:border-[color:var(--primary)]"
                 />
               </FieldShell>
             </div>
-            {workerError ? <p className="mt-3 text-sm font-medium text-[#b1382f]">{workerError}</p> : null}
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            {workerError ? <p className="mt-3 text-sm font-medium text-[color:var(--danger)]">{workerError}</p> : null}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="submit"
                 disabled={workerBusy}
-                className="inline-flex h-11 items-center justify-center rounded-[8px] bg-[#27458f] px-5 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-[color:var(--primary)] px-5 text-sm font-semibold text-[color:var(--primary-foreground)] disabled:opacity-60"
               >
                 {workerBusy ? "Saving Worker..." : "Save Worker"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowWorkerForm(false)}
-                className="inline-flex h-11 items-center justify-center rounded-[8px] border border-[#d5ddeb] bg-white px-5 text-sm font-semibold text-[#42516f]"
+                className="inline-flex h-12 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white px-5 text-sm font-semibold text-[color:var(--foreground)]"
               >
                 Close
               </button>
@@ -701,27 +740,75 @@ export function AttendanceRegister({
           </form>
         ) : null}
 
-        {registerError ? <p className="text-sm font-medium text-[#b1382f]">{registerError}</p> : null}
+        <details className="rounded-3xl border border-[color:var(--border)] bg-white/70 p-4">
+          <summary className="cursor-pointer text-sm font-bold text-[color:var(--foreground)]">
+            Month review and export
+          </summary>
+          <div className="mt-4 space-y-3">
+            {registerRows.map((row) => (
+              <div key={row.worker.id} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-[color:var(--foreground)]">{row.worker.name}</p>
+                    <p className="text-xs text-[color:var(--muted)]">
+                      {row.totalUnits.toFixed(1)} days · {formatCurrency(row.amount)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-[color:var(--muted)]">
+                    {formatCurrency(row.worker.daily_rate)}/day
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {days.map((day) => {
+                    const key = buildCellKey(row.worker.id, day.date);
+                    const existing = attendanceMap.get(key);
+                    const draft = drafts[key];
+                    const status = existing ? normalizeStatus(existing.status) : draft?.status;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleDateChange(day.date)}
+                        className={`h-7 w-7 rounded-full border text-[9px] font-bold ${
+                          status
+                            ? statusStyles[status]
+                            : "border-[color:var(--border)] bg-white text-[color:var(--muted)]"
+                        }`}
+                        title={`${formatDateLabel(day.date)} ${status ? statusNames[status] : "not marked"}`}
+                      >
+                        {status ? statusLabels[status] : day.day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={handleExport}
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-4 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+            >
+              Export CSV
+            </button>
+          </div>
+        </details>
 
-        <div className="space-y-3 border-t border-[#d8deea] pt-2">
-          <button
-            type="button"
-            onClick={handleSaveRegister}
-            disabled={registerBusy || !pendingCount}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[color:var(--primary)] px-4 text-sm font-semibold text-[color:var(--primary-foreground)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {registerBusy
-              ? "Saving Attendance Register..."
-              : `Save Attendance Register${pendingCount ? ` (${pendingCount})` : ""}`}
-          </button>
-          <button
-            type="button"
-            onClick={handleExport}
-            className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-4 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
-          >
-            Export As Excel
-          </button>
-        </div>
+        {registerError ? <p className="text-sm font-medium text-[color:var(--danger)]">{registerError}</p> : null}
+      </div>
+
+      <div className="sticky bottom-0 border-t border-[color:var(--border)] bg-[color:var(--surface)]/95 p-4 backdrop-blur">
+        <button
+          type="button"
+          onClick={handleSaveRegister}
+          disabled={registerBusy || !pendingCount}
+          className="inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-[color:var(--primary)] px-4 text-sm font-semibold text-[color:var(--primary-foreground)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {registerBusy
+            ? "Saving Attendance..."
+            : pendingCount
+              ? `Save ${pendingCount} Attendance ${pendingCount === 1 ? "Entry" : "Entries"}`
+              : "No Draft Attendance"}
+        </button>
       </div>
     </section>
   );
@@ -737,51 +824,12 @@ function DashboardStat({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-[6px] border border-[#d8deea] bg-[#fbfcff] px-3 py-2">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#6f7e99]">{label}</p>
-      <p className={`mt-1 truncate text-2xl font-semibold text-[#244082] ${valueClassName}`}>
+    <div className="rounded-2xl border border-[color:var(--border)] bg-white/80 px-3 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--muted)]">{label}</p>
+      <p className={`mt-1 truncate text-xl font-bold text-[color:var(--foreground)] ${valueClassName}`}>
         {value}
       </p>
     </div>
-  );
-}
-
-function LegendDot({ label, className }: { label: string; className: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`h-4 w-4 rounded-full ${className}`} />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function StickyHeader({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <th
-      className={`sticky border-r border-[#233866] bg-[#0f224f] px-2 py-3 text-left text-[10px] font-bold uppercase ${className}`}
-    >
-      {children}
-    </th>
-  );
-}
-
-function StickyCell({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <td className={`sticky border-b border-r border-[#edf1f7] bg-white px-3 py-2 ${className}`}>
-      {children}
-    </td>
   );
 }
 
@@ -796,11 +844,11 @@ function FieldShell({
 }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6f7e99]">
+      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--muted)]">
         {label}
       </span>
       <div className="mt-2">{children}</div>
-      {error ? <span className="mt-1 block text-xs font-medium text-[#b1382f]">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs font-medium text-[color:var(--danger)]">{error}</span> : null}
     </label>
   );
 }
@@ -821,18 +869,34 @@ function buildMonthDays(monthValue: string) {
 
     return {
       date: `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      day: String(day).padStart(2, "0"),
+      weekday,
       label: `${String(day).padStart(2, "0")} ${weekday}`,
     };
   });
+}
+
+function getInitialSelectedDate(monthValue: string, days: ReturnType<typeof buildMonthDays>) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today.startsWith(`${monthValue}-`) && days.some((day) => day.date === today)) {
+    return today;
+  }
+  return days[0]?.date ?? today;
 }
 
 function buildCellKey(workerId: string, date: string) {
   return `${workerId}__${date}`;
 }
 
-function getNextDraftStatus(status: DraftStatus | null) {
-  const currentIndex = draftCycle.findIndex((value) => value === status);
-  return draftCycle[(currentIndex + 1 + draftCycle.length) % draftCycle.length];
+function updateSelectedDraftOtHoursForKey(
+  key: string,
+  otHours: string,
+  setDrafts: Dispatch<SetStateAction<Record<string, DraftEntry>>>,
+) {
+  setDrafts((current) => ({
+    ...current,
+    [key]: { ...current[key], otHours },
+  }));
 }
 
 function normalizeStatus(status: string): DraftStatus {
@@ -847,30 +911,15 @@ function mapStatusToExport(status: string) {
 }
 
 function getStatusUnits(status: DraftStatus) {
-  if (status === "half-day") {
-    return 0.5;
-  }
-
-  if (status === "absent") {
-    return 0;
-  }
-
+  if (status === "half-day") return 0.5;
+  if (status === "absent") return 0;
   return 1;
 }
 
 function calculateDraftAmount(dailyRate: number, status: DraftStatus, otHours: number) {
-  if (status === "present") {
-    return dailyRate;
-  }
-
-  if (status === "half-day") {
-    return Number((dailyRate * 0.5).toFixed(2));
-  }
-
-  if (status === "overtime") {
-    return Number((dailyRate + (dailyRate / 8) * otHours).toFixed(2));
-  }
-
+  if (status === "present") return dailyRate;
+  if (status === "half-day") return Number((dailyRate * 0.5).toFixed(2));
+  if (status === "overtime") return Number((dailyRate + (dailyRate / 8) * otHours).toFixed(2));
   return 0;
 }
 

@@ -11,6 +11,7 @@ import {
 } from "@/features/attendance/queries";
 import { getProjects } from "@/features/projects/queries";
 import { getCurrentUser } from "@/lib/auth/session";
+import { getUserDisplayName } from "@/lib/auth/user-display-name";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +40,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
       ? params.project
       : projects[0]?.id ?? "";
 
-  const userName =
-    typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
-      ? user.user_metadata.name
-      : user?.email ?? "User";
+  const userName = getUserDisplayName(user);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1440px] px-3 pb-24 pt-4 sm:px-5 sm:pt-6">
@@ -52,7 +50,7 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
             Worker Attendance
           </p>
           <p className="mt-1 text-sm text-[color:var(--muted)]">
-            Monthly register view connected directly to the attendance ledger flow.
+            Phone-first daily marking connected directly to the attendance ledger flow.
           </p>
         </div>
         <SignOutButton />
