@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const payload = parseSignInPayload(body);
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: payload.email,
@@ -47,3 +47,4 @@ export async function POST(request: Request) {
     return response;
   }
 }
+

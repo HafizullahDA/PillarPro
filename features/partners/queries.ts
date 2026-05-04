@@ -19,7 +19,7 @@ import {
 import { getRelationName } from "@/lib/utils/supabase-relations";
 
 export async function getPartners(): Promise<PartnerListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("partners")
     .select("id, project_id, name, created_at, projects(name)")
@@ -41,7 +41,7 @@ export async function getPartners(): Promise<PartnerListItem[]> {
 export async function getPartnersPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<PartnerListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("partners")
@@ -66,7 +66,7 @@ export async function getPartnersPage(
 }
 
 export async function createPartner(payload: PartnerInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("partners")
     .insert(payload)
@@ -78,7 +78,7 @@ export async function createPartner(payload: PartnerInsert) {
 }
 
 export async function getPartnerTransactions(): Promise<PartnerTransactionRow[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("partner_transactions")
     .select("id, partner_id, entry_type, payment_mode, amount, transaction_date, partners(name), projects(name)")
@@ -105,7 +105,7 @@ export async function getPartnerTransactions(): Promise<PartnerTransactionRow[]>
 export async function getPartnerTransactionsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<PartnerTransactionRow>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("partner_transactions")
@@ -138,7 +138,7 @@ export async function getPartnerTransactionsPage(
 }
 
 export async function createPartnerTransaction(payload: PartnerTransactionInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: partner, error: partnerError } = await supabase
     .from("partners")
     .select("name")
@@ -212,3 +212,4 @@ export async function getPartnerBalances(): Promise<PartnerBalanceRow[]> {
     };
   });
 }
+

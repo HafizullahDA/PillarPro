@@ -14,7 +14,7 @@ export async function getCurrentUser(): Promise<User | null> {
     return null;
   }
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.auth.getUser(accessToken);
 
   if (error) {
@@ -22,6 +22,10 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   return data.user ?? null;
+}
+
+export async function getCurrentUserId() {
+  return (await getCurrentUser())?.id ?? null;
 }
 
 export function applySessionCookies(response: NextResponse, session: Session) {

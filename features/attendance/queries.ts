@@ -23,7 +23,7 @@ import {
 import { getRelationName } from "@/lib/utils/supabase-relations";
 
 export async function getWorkers(): Promise<WorkerListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("workers")
     .select("id, project_id, name, designation, daily_rate, created_at, projects(name)")
@@ -48,7 +48,7 @@ export async function getWorkers(): Promise<WorkerListItem[]> {
 export async function getWorkersPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<WorkerListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("workers")
@@ -78,7 +78,7 @@ export async function getWorkersPage(
 }
 
 export async function createWorker(payload: WorkerInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("workers")
     .insert(payload)
@@ -90,7 +90,7 @@ export async function createWorker(payload: WorkerInsert) {
 }
 
 export async function getAttendanceRecords(monthValue?: string): Promise<AttendanceListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const monthRange = getMonthRange(monthValue);
   const { data, error } = await supabase
     .from("attendance")
@@ -122,7 +122,7 @@ export async function getAttendanceRecordsPage(
   options?: PaginationOptions,
   monthValue?: string,
 ): Promise<PaginatedResult<AttendanceListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const monthRange = getMonthRange(monthValue);
   const { data, error, count } = await supabase
@@ -172,7 +172,7 @@ export async function getAttendanceSummary(): Promise<AttendanceSummaryData> {
 }
 
 export async function createAttendanceRecord(payload: AttendanceInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const { data: worker, error: workerError } = await supabase
     .from("workers")
@@ -234,7 +234,7 @@ export async function createAttendanceRecord(payload: AttendanceInsert) {
 }
 
 export async function deactivateWorker(workerId: string) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const normalizedWorkerId = workerId.trim();
 
   if (!normalizedWorkerId) {
@@ -251,3 +251,4 @@ export async function deactivateWorker(workerId: string) {
 
   return { id: data };
 }
+

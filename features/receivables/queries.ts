@@ -23,7 +23,7 @@ import {
 } from "@/lib/utils/supabase-relations";
 
 export async function getBills(): Promise<BillListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("bills")
     .select(
@@ -51,7 +51,7 @@ export async function getBills(): Promise<BillListItem[]> {
 export async function getBillsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<BillListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("bills")
@@ -83,7 +83,7 @@ export async function getBillsPage(
 }
 
 export async function createBill(payload: BillInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
     type: "receivable",
@@ -125,7 +125,7 @@ export async function createBill(payload: BillInsert) {
 }
 
 export async function getReceipts(): Promise<ReceiptListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("receipts")
     .select(
@@ -154,7 +154,7 @@ export async function getReceipts(): Promise<ReceiptListItem[]> {
 export async function getReceiptsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<ReceiptListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("receipts")
@@ -187,7 +187,7 @@ export async function getReceiptsPage(
 }
 
 export async function createReceipt(payload: ReceiptInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
     type: "receivable",
@@ -254,7 +254,7 @@ export async function getProjectReceivableSummaries(): Promise<ProjectReceivable
 }
 
 async function getProjectBaseRows(): Promise<ProjectListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("projects")
     .select("id, name, code, agency_name, advertised_cost, awarded_amount, start_date, status, created_at")
@@ -263,3 +263,4 @@ async function getProjectBaseRows(): Promise<ProjectListItem[]> {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+

@@ -20,6 +20,7 @@ export type ProjectInsert = {
   awarded_amount: number;
   start_date: string;
   status: "active";
+  owner_user_id?: string;
 };
 
 export type ProjectFormValues = {

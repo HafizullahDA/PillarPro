@@ -74,7 +74,7 @@ export async function createTransaction(
     );
   }
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const linkedId =
     input.linked_id?.trim() || vendorId || workerId || partnerId || undefined;
   const referenceId =
@@ -106,7 +106,7 @@ export async function createTransaction(
 }
 
 export async function deleteTransaction(transactionId: string) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { error } = await supabase.from("transactions").delete().eq("id", transactionId);
 
   if (error) {
@@ -115,7 +115,7 @@ export async function deleteTransaction(transactionId: string) {
 }
 
 export async function getTransactions(): Promise<TransactionRow[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("transactions")
     .select(
@@ -192,3 +192,4 @@ function extractLinkedId(notes: string | null) {
 
   return notes.split(" | linked:")[1] ?? null;
 }
+

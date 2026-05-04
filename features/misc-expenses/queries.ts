@@ -16,7 +16,7 @@ import {
 import { getRelationName } from "@/lib/utils/supabase-relations";
 
 export async function getMiscExpenses(): Promise<MiscExpenseListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("misc_expenses")
     .select("id, project_id, category, amount, expense_date, description, notes, projects(name)")
@@ -40,7 +40,7 @@ export async function getMiscExpenses(): Promise<MiscExpenseListItem[]> {
 export async function getMiscExpensesPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<MiscExpenseListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("misc_expenses")
@@ -70,7 +70,7 @@ export async function getMiscExpensesPage(
 }
 
 export async function createMiscExpense(payload: MiscExpenseInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
     type: "expense",
@@ -106,3 +106,4 @@ export async function createMiscExpense(payload: MiscExpenseInsert) {
 
   return data;
 }
+

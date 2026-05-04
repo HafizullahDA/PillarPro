@@ -1,4 +1,5 @@
 import type { ProjectInsert, ProjectListItem } from "@/features/projects/types";
+import { getCurrentUserId } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   buildPaginationMeta,
@@ -8,7 +9,7 @@ import {
 } from "@/lib/utils/pagination";
 
 export async function getProjects(): Promise<ProjectListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("projects")
     .select("id, name, code, agency_name, advertised_cost, awarded_amount, start_date, status, created_at")
@@ -24,7 +25,7 @@ export async function getProjects(): Promise<ProjectListItem[]> {
 export async function getProjectsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<ProjectListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("projects")
@@ -46,10 +47,19 @@ export async function getProjectsPage(
 }
 
 export async function createProject(payload: ProjectInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
+  const ownerUserId = await getCurrentUserId();
+
+  if (!ownerUserId) {
+    throw new Error("You must be signed in to create a project.");
+  }
+
   const { data, error } = await supabase
     .from("projects")
-    .insert(payload)
+    .insert({
+      ...payload,
+      owner_user_id: ownerUserId,
+    })
     .select("id, name, code, agency_name, advertised_cost, awarded_amount, start_date, status, created_at")
     .single();
 
@@ -61,7 +71,7 @@ export async function createProject(payload: ProjectInsert) {
 }
 
 export async function deleteProject(projectId: string) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const normalizedProjectId = projectId.trim();
 
   if (!normalizedProjectId) {

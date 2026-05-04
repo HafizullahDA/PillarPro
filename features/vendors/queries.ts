@@ -20,7 +20,7 @@ import {
 } from "@/lib/utils/pagination";
 
 export async function getVendors(): Promise<VendorListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("vendors")
     .select("id, project_id, name, contact_person, phone, created_at, projects(name)")
@@ -44,7 +44,7 @@ export async function getVendors(): Promise<VendorListItem[]> {
 export async function getVendorsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<VendorListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("vendors")
@@ -73,7 +73,7 @@ export async function getVendorsPage(
 }
 
 export async function createVendor(payload: VendorInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("vendors")
     .insert(payload)
@@ -85,7 +85,7 @@ export async function createVendor(payload: VendorInsert) {
 }
 
 export async function getVendorPurchases(): Promise<VendorPurchaseListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("vendor_purchases")
     .select("id, project_id, material, quantity, rate, amount, purchase_date, vendors(name), projects(name)")
@@ -113,7 +113,7 @@ export async function getVendorPurchases(): Promise<VendorPurchaseListItem[]> {
 export async function getVendorPurchasesPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<VendorPurchaseListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("vendor_purchases")
@@ -147,7 +147,7 @@ export async function getVendorPurchasesPage(
 }
 
 export async function createVendorPurchase(payload: VendorPurchaseInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
@@ -189,7 +189,7 @@ export async function createVendorPurchase(payload: VendorPurchaseInsert) {
 }
 
 export async function getVendorPayments(): Promise<VendorPaymentListItem[]> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("vendor_payments")
     .select("id, project_id, amount, payment_mode, payment_reference, payment_date, vendors(name), projects(name)")
@@ -216,7 +216,7 @@ export async function getVendorPayments(): Promise<VendorPaymentListItem[]> {
 export async function getVendorPaymentsPage(
   options?: PaginationOptions,
 ): Promise<PaginatedResult<VendorPaymentListItem>> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { page, pageSize, from, to } = normalizePagination(options);
   const { data, error, count } = await supabase
     .from("vendor_payments")
@@ -249,7 +249,7 @@ export async function getVendorPaymentsPage(
 }
 
 export async function createVendorPayment(payload: VendorPaymentInsert) {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
 
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
@@ -288,3 +288,4 @@ export async function createVendorPayment(payload: VendorPaymentInsert) {
   }
   return data;
 }
+

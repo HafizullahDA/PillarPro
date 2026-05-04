@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/sign-in?message=Verification link is invalid.", url));
   }
 
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error || !data.session) {
@@ -23,3 +23,4 @@ export async function GET(request: Request) {
   applySessionCookies(response, data.session);
   return response;
 }
+

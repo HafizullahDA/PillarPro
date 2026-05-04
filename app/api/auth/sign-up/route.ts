@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const payload = parseSignUpPayload(body);
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase.auth.signUp({
       email: payload.email,
@@ -44,3 +44,4 @@ export async function POST(request: Request) {
     return jsonError(error, "Failed to create account.");
   }
 }
+
