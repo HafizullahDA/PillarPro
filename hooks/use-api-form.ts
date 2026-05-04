@@ -46,6 +46,7 @@ export function useApiForm<TValues>(initialValues: TValues) {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
 

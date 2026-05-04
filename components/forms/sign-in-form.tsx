@@ -1,7 +1,6 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form-error";
 import { InputField } from "@/components/ui/input-field";
@@ -11,7 +10,6 @@ import { emptySignInFormValues } from "@/features/auth/types";
 import { validateSignInForm } from "@/features/auth/validators";
 
 export function SignInForm() {
-  const router = useRouter();
   const { values, errors, formError, busy, updateField, setErrors, submitForm } =
     useApiForm<SignInFormValues>(emptySignInFormValues);
 
@@ -28,12 +26,10 @@ export function SignInForm() {
       endpoint: "/api/auth/sign-in",
       payload: values,
       errorMessage: "Unable to sign in.",
-      resetValues: emptySignInFormValues,
     });
 
     if (success) {
-      router.push("/dashboard");
-      router.refresh();
+      window.location.assign("/dashboard");
     }
   }
 
