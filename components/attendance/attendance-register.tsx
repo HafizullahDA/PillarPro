@@ -360,7 +360,7 @@ export function AttendanceRegister({
 
   async function handleRemoveWorker(workerId: string) {
     const confirmed = window.confirm(
-      "Remove this worker? Workers with saved attendance cannot be removed.",
+      "Delete this worker and all of their saved attendance salary entries? This permanently removes that labour record from PillarPro.",
     );
 
     if (!confirmed) return;
@@ -374,12 +374,12 @@ export function AttendanceRegister({
 
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(result.error ?? "Failed to remove worker.");
+        throw new Error(result.error ?? "Failed to delete worker.");
       }
 
       window.location.reload();
     } catch (error) {
-      setRegisterError(error instanceof Error ? error.message : "Failed to remove worker.");
+      setRegisterError(error instanceof Error ? error.message : "Failed to delete worker.");
     }
   }
 
@@ -610,31 +610,32 @@ export function AttendanceRegister({
                         ? `Draft · ${formatCurrency(calculateDraftAmount(worker.daily_rate, draft.status, Number(draft.otHours || 0)))}`
                         : "Tap a status to mark this worker"}
                   </span>
-                  {existing ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCellKey(key)}
-                      className="font-bold text-[color:var(--primary)]"
-                    >
-                      Details
-                    </button>
-                  ) : draft ? (
-                    <button
-                      type="button"
-                      onClick={() => clearDraft(worker.id)}
-                      className="font-bold text-[color:var(--danger)]"
-                    >
-                      Clear
-                    </button>
-                  ) : (
+                  <div className="flex items-center gap-3">
+                    {existing ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCellKey(key)}
+                        className="font-bold text-[color:var(--primary)]"
+                      >
+                        Details
+                      </button>
+                    ) : draft ? (
+                      <button
+                        type="button"
+                        onClick={() => clearDraft(worker.id)}
+                        className="font-bold text-[color:var(--primary)]"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => handleRemoveWorker(worker.id)}
                       className="font-bold text-[color:var(--danger)]"
                     >
-                      Remove
+                      Remove worker
                     </button>
-                  )}
+                  </div>
                 </div>
               </article>
             ))

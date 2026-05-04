@@ -1,4 +1,8 @@
-import { createProject, getProjectsPage } from "@/features/projects/queries";
+import {
+  createProject,
+  deleteProject,
+  getProjectsPage,
+} from "@/features/projects/queries";
 import {
   parseProjectPayload,
   ProjectValidationError,
@@ -30,5 +34,16 @@ export async function POST(request: Request) {
     }
 
     return jsonError(error, "Failed to create project.");
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const projectId = searchParams.get("id") ?? "";
+    const project = await deleteProject(projectId);
+    return jsonData(project);
+  } catch (error) {
+    return jsonError(error, "Failed to remove project.", 400);
   }
 }

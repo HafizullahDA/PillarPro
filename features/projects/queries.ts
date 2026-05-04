@@ -59,3 +59,22 @@ export async function createProject(payload: ProjectInsert) {
 
   return data;
 }
+
+export async function deleteProject(projectId: string) {
+  const supabase = createServerSupabaseClient();
+  const normalizedProjectId = projectId.trim();
+
+  if (!normalizedProjectId) {
+    throw new Error("Project is required.");
+  }
+
+  const { data, error } = await supabase.rpc("delete_project_cascade", {
+    target_project_id: normalizedProjectId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { id: data };
+}

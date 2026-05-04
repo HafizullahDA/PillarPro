@@ -241,29 +241,13 @@ export async function deactivateWorker(workerId: string) {
     throw new Error("Worker is required.");
   }
 
-  const { count, error: attendanceError } = await supabase
-    .from("attendance")
-    .select("id", { count: "exact", head: true })
-    .eq("worker_id", normalizedWorkerId);
-
-  if (attendanceError) {
-    throw new Error(attendanceError.message);
-  }
-
-  if ((count ?? 0) > 0) {
-    throw new Error("This worker already has attendance records and cannot be removed.");
-  }
-
-  const { data, error } = await supabase
-    .from("workers")
-    .update({ active: false })
-    .eq("id", normalizedWorkerId)
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc("delete_worker_cascade", {
+    target_worker_id: normalizedWorkerId,
+  });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data;
+  return { id: data };
 }
