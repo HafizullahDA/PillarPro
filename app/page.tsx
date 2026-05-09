@@ -1,14 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
 
-export default async function HomePage() {
-  const user = await getCurrentUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
+export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 pb-8 pt-6 sm:max-w-5xl sm:px-6 lg:justify-center">
       <section className="overflow-hidden rounded-[32px] border border-[color:var(--border)] bg-[color:var(--surface)]/95 shadow-[0_24px_80px_rgba(64,42,16,0.14)]">

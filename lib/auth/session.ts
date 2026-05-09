@@ -8,20 +8,24 @@ import {
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function getCurrentUser(): Promise<User | null> {
-  const accessToken = await getAccessToken();
+  try {
+    const accessToken = await getAccessToken();
 
-  if (!accessToken) {
+    if (!accessToken) {
+      return null;
+    }
+
+    const supabase = await createServerSupabaseClient();
+    const { data, error } = await supabase.auth.getUser(accessToken);
+
+    if (error) {
+      return null;
+    }
+
+    return data.user ?? null;
+  } catch {
     return null;
   }
-
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.auth.getUser(accessToken);
-
-  if (error) {
-    return null;
-  }
-
-  return data.user ?? null;
 }
 
 export async function getCurrentUserId() {
