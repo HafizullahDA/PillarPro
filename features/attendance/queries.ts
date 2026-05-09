@@ -13,6 +13,7 @@ import {
   createTransaction,
   deleteTransaction,
 } from "@/lib/services/transaction-service";
+import { ensureProjectAccess } from "@/lib/auth/project-access";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   buildPaginationMeta,
@@ -79,6 +80,8 @@ export async function getWorkersPage(
 
 export async function createWorker(payload: WorkerInsert) {
   const supabase = await createServerSupabaseClient();
+  await ensureProjectAccess(payload.project_id);
+
   const { data, error } = await supabase
     .from("workers")
     .insert(payload)

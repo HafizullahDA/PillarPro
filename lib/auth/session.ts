@@ -29,8 +29,16 @@ export async function getCurrentUserId() {
 }
 
 export function applySessionCookies(response: NextResponse, session: Session) {
-  response.cookies.set(AUTH_ACCESS_COOKIE, session.access_token, buildCookieOptions());
-  response.cookies.set(AUTH_REFRESH_COOKIE, session.refresh_token, buildCookieOptions());
+  response.cookies.set(
+    AUTH_ACCESS_COOKIE,
+    session.access_token,
+    buildCookieOptions(getAccessTokenMaxAge(session)),
+  );
+  response.cookies.set(
+    AUTH_REFRESH_COOKIE,
+    session.refresh_token,
+    buildCookieOptions(60 * 60 * 24 * 7),
+  );
 }
 
 export function clearSessionCookies(response: NextResponse) {
@@ -48,13 +56,13 @@ async function getAccessToken() {
   return (await cookies()).get(AUTH_ACCESS_COOKIE)?.value ?? null;
 }
 
-function buildCookieOptions() {
+function buildCookieOptions(maxAge = 60 * 60) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge,
   };
 }
 
@@ -63,4 +71,15 @@ function buildExpiredCookieOptions() {
     ...buildCookieOptions(),
     maxAge: 0,
   };
+}
+
+function getAccessTokenMaxAge(session: Session) {
+  const fallbackMaxAge = 60 * 55;
+  const expiresIn = Number(session.expires_in ?? 0);
+
+  if (!Number.isFinite(expiresIn) || expiresIn <= 120) {
+    return fallbackMaxAge;
+  }
+
+  return expiresIn - 60;
 }

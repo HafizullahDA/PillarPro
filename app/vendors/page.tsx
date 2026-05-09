@@ -10,10 +10,13 @@ import {
   getVendors,
   getVendorsPage,
 } from "@/features/vendors/queries";
+import { requireSignedInPage } from "@/lib/auth/page-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function VendorsPage() {
+  await requireSignedInPage();
+
   const [projects, vendors, vendorsPage, purchases, payments] = await Promise.all([
     getProjects(),
     getVendors(),

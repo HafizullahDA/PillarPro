@@ -10,6 +10,7 @@ import {
   getWorkers,
 } from "@/features/attendance/queries";
 import { getProjects } from "@/features/projects/queries";
+import { requireSignedInPage } from "@/lib/auth/page-guard";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getUserDisplayName } from "@/lib/auth/user-display-name";
 
@@ -23,6 +24,8 @@ type AttendancePageProps = {
 };
 
 export default async function AttendancePage({ searchParams }: AttendancePageProps) {
+  await requireSignedInPage();
+
   const params = (await searchParams) ?? {};
   const selectedMonth = params.month && /^\d{4}-\d{2}$/.test(params.month)
     ? params.month

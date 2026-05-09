@@ -1,11 +1,19 @@
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignInForm } from "@/components/forms/sign-in-form";
+import { getCurrentUser } from "@/lib/auth/session";
 
 type SignInPageProps = {
   searchParams?: Promise<{ message?: string }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const user = await getCurrentUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   const params = await searchParams;
 
   return (

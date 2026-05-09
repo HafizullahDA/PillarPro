@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProjectAccess } from "@/lib/auth/project-access";
 import {
   isPartnerTransactionCategory,
   isVendorTransactionCategory,
@@ -74,6 +75,12 @@ export async function createTransaction(
     );
   }
 
+  try {
+    await ensureProjectAccess(input.project_id);
+  } catch (error) {
+    return errorResult(error, "Project access could not be verified.");
+  }
+
   const supabase = await createServerSupabaseClient();
   const linkedId =
     input.linked_id?.trim() || vendorId || workerId || partnerId || undefined;
@@ -99,7 +106,7 @@ export async function createTransaction(
     .single();
 
   if (error) {
-    return errorResult(error, "Failed to create transaction.");
+    return errorResult(error, error.message || "Failed to create transaction.");
   }
 
   return dataResult(data);

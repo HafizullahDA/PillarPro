@@ -12,10 +12,13 @@ import {
   getReceipts,
   getReceiptsPage,
 } from "@/features/receivables/queries";
+import { requireSignedInPage } from "@/lib/auth/page-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceivablesPage() {
+  await requireSignedInPage();
+
   const [projects, bills, billsPage, receiptsPage, summaries] = await Promise.all([
     getProjects(),
     getBills(),

@@ -6,6 +6,7 @@ import {
   createTransaction,
   deleteTransaction,
 } from "@/lib/services/transaction-service";
+import { ensureProjectAccess } from "@/lib/auth/project-access";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   buildPaginationMeta,
@@ -71,6 +72,8 @@ export async function getMiscExpensesPage(
 
 export async function createMiscExpense(payload: MiscExpenseInsert) {
   const supabase = await createServerSupabaseClient();
+  await ensureProjectAccess(payload.project_id);
+
   const transactionResult = await createTransaction({
     project_id: payload.project_id,
     type: "expense",

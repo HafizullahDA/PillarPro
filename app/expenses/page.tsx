@@ -3,10 +3,13 @@ import { MiscExpensesTable } from "@/components/lists/misc-expenses-table";
 import { MobilePage } from "@/components/layout/mobile-page";
 import { getProjects } from "@/features/projects/queries";
 import { getMiscExpensesPage } from "@/features/misc-expenses/queries";
+import { requireSignedInPage } from "@/lib/auth/page-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExpensesPage() {
+  await requireSignedInPage();
+
   const [projects, expenses] = await Promise.all([
     getProjects(),
     getMiscExpensesPage(),

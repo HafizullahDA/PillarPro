@@ -8,10 +8,13 @@ import {
   getDashboardProjectGroups,
   getDashboardSummary,
 } from "@/features/dashboard/queries";
+import { requireSignedInPage } from "@/lib/auth/page-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  await requireSignedInPage();
+
   const [summary, alerts, projectGroups, categoryGroups] = await Promise.all([
     getDashboardSummary(),
     getDashboardOutstandingAlerts(),
